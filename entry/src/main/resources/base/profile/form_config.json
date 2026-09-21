@@ -1,0 +1,26 @@
+{
+  "forms": [
+    {
+      "name": "QfWidget",
+      "displayName": "青番番茄钟",
+      "description": "今日番茄进度 · 连签 · 森林",
+      "src": "./ets/widget/pages/WidgetCard.ets",
+      "uiSyntax": "arkts",
+      "window": {
+        "designWidth": 720,
+        "autoDesignWidth": true
+      },
+      "colorMode": "auto",
+      "isDefault": true,
+      "updateEnabled": true,
+      "scheduledUpdateTime": "09:00",
+      "updateDuration": 1,
+      "defaultDimension": "2*2",
+      "supportDimensions": [
+        "2*2",
+        "2*4",
+        "4*4"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\23716\\Desktop\\qingfan\\.sign\\appCertChain.cer",
+          "keyAlias": "openharmony application release",
+          "keyPassword": "00000016a18a61760d0c168b9c00b7988356cfdffa7903c32b0deb97cd9b0c7173645eff2925",
+          "profile": "C:\\Users\\23716\\Desktop\\qingfan\\.sign\\debug.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\23716\\Desktop\\qingfan\\.sign\\sign.p12",
+          "storePassword": "00000016a18a61760d0c168b9c00b7988356cfdffa7903c32b0deb97cd9b0c7173645eff2925"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": "26.0.0",
+        "compatibleSdkVersion": "26.0.0",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug",
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+/node_modules
+/oh_modules
+/local.properties
+/.idea
+**/build
+/.hvigor
+.cxx
+/.clangd
+/.clang-format
+/.clang-tidy
+**/.test
+/.appanalyzer
+
+# 签名材料与密钥（切勿提交）
+/.sign
+/.sign_*
+*.p12
+*.jks
+*.keystore

@@ -1,0 +1,23 @@
+{
+  "src": [
+    "pages/Index",
+    "pages/Onboarding",
+    "pages/Login",
+    "pages/Home",
+    "pages/AddTask",
+    "pages/Focus",
+    "pages/Complete",
+    "pages/Stats",
+    "pages/Rank",
+    "pages/StudyRoom",
+    "pages/StudyRoomFocus",
+    "pages/Me",
+    "pages/EditProfile",
+    "pages/Badges",
+    "pages/Notify",
+    "pages/ThemePicker",
+    "pages/WidgetPicker",
+    "pages/AIAssistant",
+    "pages/AIChat"
+  ]
+}
