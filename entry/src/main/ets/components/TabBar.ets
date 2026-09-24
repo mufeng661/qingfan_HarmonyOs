@@ -14,7 +14,6 @@ export const TABS: TabSpec[] = [
   { id: 'home', label: '今日', icon: '🌿', url: 'pages/Home' },
   { id: 'study', label: '自习室', icon: '👥', url: 'pages/StudyRoom' },
   { id: 'stats', label: '统计', icon: '📊', url: 'pages/Stats' },
-  { id: 'rank', label: '排行', icon: '🏆', url: 'pages/Rank' },
   { id: 'me', label: '我的', icon: '👤', url: 'pages/Me' }
 ];
 
@@ -40,7 +39,7 @@ export struct TabBar {
           if (this.active === t.id) {
             return;
           }
-          if (t.id === 'stats' || t.id === 'rank') {
+          if (t.id === 'stats') {
             if (!AppState.isLoggedIn()) {
               promptAction.showToast({ message: '登录后即可使用，请到「我的」登录', duration: 1800 });
               router.replaceUrl({ url: 'pages/Me' });

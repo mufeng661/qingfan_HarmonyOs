@@ -1,8 +1,8 @@
 import { router } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
-import { themeOf, UserProfile, ThemeDef, FONT_DISPLAY, Account } from '../model/Types';
-import { genId } from '../model/Store';
+import { themeOf, UserProfile, ThemeDef, FONT_DISPLAY } from '../model/Types';
+import { CloudAuthService, AuthUser } from '../service/CloudAuthService';
 
 @Entry
 @Component
@@ -58,40 +58,53 @@ struct Login {
     if (this.swayTimerId !== -1) clearInterval(this.swayTimerId);
   }
 
+  private msgOf(e: Object): string {
+    return (e as Error).message;
+  }
+
+  private async applyAuthUser(au: AuthUser): Promise<void> {
+    const nick = au.nickname.length > 0 ? au.nickname : au.username;
+    const u: UserProfile = {
+      id: 'u' + au.id,
+      phone: au.phone,
+      nickname: nick,
+      avatarSeed: au.avatarSeed.length > 0 ? au.avatarSeed : nick.slice(0, 1),
+      bio: au.bio.length > 0 ? au.bio : '把专注，种成一片森林',
+      level: 1,
+      exp: 0,
+      nextLevelExp: 3000,
+      streak: 0,
+      lastSignDate: '',
+      signDates: [],
+      theme: AppState.instance.themeKey,
+      notifyEnabled: true
+    };
+    AppState.instance.user = u;
+    await AppState.saveUser();
+    await AppState.loadBusinessData();
+  }
+
   private async doLogin() {
     if (!this.isPhoneValid()) {
       promptAction.showToast({ message: '请输入正确的手机号', duration: 1500 });
       return;
     }
-    const phone = this.phone.replace(/\s/g, '');
-    const acc = AppState.instance.account;
-    if (acc === null || acc.phone !== phone || acc.pwdHash !== AppState.hashPwd(this.password)) {
-      promptAction.showToast({ message: '手机号或密码错误', duration: 1500 });
+    if (this.password.length < 6) {
+      promptAction.showToast({ message: '密码至少 6 位', duration: 1500 });
       return;
     }
-    const nick: string = acc.nickname;
+    if (this.loading) return;
     this.loading = true;
-    setTimeout(async () => {
-      const u: UserProfile = {
-        id: genId('u'),
-        phone: phone,
-        nickname: nick,
-        avatarSeed: nick.slice(0, 1),
-        bio: '把专注，种成一片森林',
-        level: 1,
-        exp: 0,
-        nextLevelExp: 3000,
-        streak: 0,
-        lastSignDate: '',
-        signDates: [],
-        theme: AppState.instance.themeKey,
-        notifyEnabled: true
-      };
-      AppState.instance.user = u;
-      await AppState.saveUser();
+    const phone = this.phone.replace(/\s/g, '');
+    try {
+      const au = await CloudAuthService.login(phone, this.password);
+      await this.applyAuthUser(au);
       this.loading = false;
       router.back();
-    }, 400);
+    } catch (e) {
+      this.loading = false;
+      promptAction.showToast({ message: this.msgOf(e as Object), duration: 1500 });
+    }
   }
 
   private async doRegister() {
@@ -116,34 +129,19 @@ struct Login {
       promptAction.showToast({ message: '验证码错误，演示码为 1234', duration: 1500 });
       return;
     }
-    const phone = this.phone.replace(/\s/g, '');
-    const pwdHash = AppState.hashPwd(this.password);
+    if (this.loading) return;
     this.loading = true;
-    setTimeout(async () => {
-      const acc: Account = { phone: phone, pwdHash: pwdHash, nickname: name };
-      AppState.instance.account = acc;
-      await AppState.saveAccount();
-      const u: UserProfile = {
-        id: genId('u'),
-        phone: phone,
-        nickname: name,
-        avatarSeed: name.slice(0, 1),
-        bio: '把专注，种成一片森林',
-        level: 1,
-        exp: 0,
-        nextLevelExp: 3000,
-        streak: 0,
-        lastSignDate: '',
-        signDates: [],
-        theme: AppState.instance.themeKey,
-        notifyEnabled: true
-      };
-      AppState.instance.user = u;
-      await AppState.saveUser();
+    const phone = this.phone.replace(/\s/g, '');
+    try {
+      const au = await CloudAuthService.register(name, phone, this.password);
+      await this.applyAuthUser(au);
       this.loading = false;
       promptAction.showToast({ message: '注册成功', duration: 1200 });
       router.back();
-    }, 500);
+    } catch (e) {
+      this.loading = false;
+      promptAction.showToast({ message: this.msgOf(e as Object), duration: 1500 });
+    }
   }
 
   build() {

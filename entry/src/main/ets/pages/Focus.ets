@@ -3,11 +3,22 @@ import { promptAction } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
 import { themeOf, BACKGROUNDS, WHITE_NOISES, DURATIONS, INTERRUPT_REASONS, TaskItem, FocusRecord, BgOption, NoiseOption } from '../model/Types';
 import { Store, formatMMSS, genId, todayKey } from '../model/Store';
+import { CloudRoomService, Room, RoomMember } from '../service/CloudRoomService';
+
+interface RankMemberView {
+  name: string;
+  role: string;
+  joinedAt: number;
+  isMe: boolean;
+  minutes: number;
+}
 
 @Entry
 @Component
 struct Focus {
   @State taskId: string = '';
+  @State roomId: string = '';
+  @State roomName: string = '';
   @State durationSec: number = 25 * 60;
   @State remainingSec: number = 25 * 60;
   @State running: boolean = false;
@@ -15,6 +26,10 @@ struct Focus {
   @State noiseKey: string = 'mute';
   @State showQuit: boolean = false;
   @State quitReason: string = '临时有事';
+  @State showRank: boolean = false;
+  @State rankMembers: RankMemberView[] = [];
+  @State rankLoading: boolean = false;
+  @State showContinue: boolean = false;
   @State ringTick: number = 0;
   @State startTs: number = 0;
   @State elapsedSec: number = 0;
@@ -23,6 +38,13 @@ struct Focus {
 
   aboutToAppear() {
     const params = router.getParams() as Record<string, Object>;
+    if (params && params['roomId']) {
+      this.roomId = params['roomId'] as string;
+      this.roomName = (params['roomName'] ?? '自习室') as string;
+      this.durationSec = 25 * 60;
+      this.remainingSec = this.durationSec;
+      return;
+    }
     if (params && params['taskId']) {
       this.taskId = params['taskId'] as string;
       const t = AppState.instance.tasks.find(x => x.id === this.taskId);
@@ -43,6 +65,9 @@ struct Focus {
   }
 
   title(): string {
+    if (this.roomId.length > 0) {
+      return this.roomName;
+    }
     return this.task()?.title ?? '专注中';
   }
 
@@ -87,6 +112,185 @@ struct Focus {
   curPomodoro(): number {
     const k = todayKey();
     return (AppState.instance.stats[k]?.pomodoroCount ?? 0) + 1;
+  }
+
+  openRank() {
+    this.showRank = true;
+    this.loadRank();
+  }
+
+  // 上报本房间专注时长（云函数支持 focus.record 时生效；不支持则忽略）
+  reportRoomFocus(mins: number) {
+    if (this.roomId.length === 0 || mins <= 0) return;
+    const uid = AppState.userKey();
+    CloudRoomService.recordFocus(uid, this.roomId, mins).catch((err: Object) => {
+      console.warn('focus.record unsupported: ' + err);
+    });
+  }
+
+  // 排行只显示「已加入该房间」的成员（按加入时间排序，房主在前）
+  async loadRank(): Promise<void> {
+    if (this.roomId.length === 0) return;
+    this.rankLoading = true;
+    try {
+      const uid = AppState.userKey();
+      const myName = AppState.instance.user?.nickname ?? '我';
+      const detail = await CloudRoomService.get(uid, this.roomId);
+      const members: RoomMember[] = detail.members ? detail.members : [];
+      const rows: RankMemberView[] = [];
+      for (let i = 0; i < members.length; i++) {
+        const m = members[i];
+        const isMe = m.user_id === uid;
+        let name = '用户 …' + String(m.user_id).slice(-6);
+        if (isMe) {
+          name = myName;
+        } else if (m.nickname !== undefined && m.nickname.length > 0) {
+          name = m.nickname;
+        }
+        let mins = -1;
+        if (m.focus_minutes !== undefined) {
+          mins = m.focus_minutes;
+        } else if (isMe) {
+          mins = AppState.roomFocusOf(this.roomId);
+        }
+        const row: RankMemberView = {
+          name: name,
+          role: m.role === 'owner' ? '房主' : '成员',
+          joinedAt: m.joined_at,
+          isMe: isMe,
+          minutes: mins
+        };
+        rows.push(row);
+      }
+      rows.sort((a, b) => {
+        if (a.minutes >= 0 && b.minutes >= 0) {
+          return b.minutes - a.minutes;
+        }
+        if (a.minutes >= 0) return -1;
+        if (b.minutes >= 0) return 1;
+        return a.joinedAt - b.joinedAt;
+      });
+      this.rankMembers = rows;
+    } catch (e) {
+      this.rankMembers = [];
+    } finally {
+      this.rankLoading = false;
+    }
+  }
+
+  @Builder
+  rankPanel() {
+    Stack() {
+      Column()
+        .width('100%').height('100%')
+        .backgroundColor('rgba(30,40,26,0.42)')
+        .onClick(() => { this.showRank = false; })
+      Column() {
+        Text('房间成员').fontFamily('serif').fontSize(17).fontColor('#2C3A28')
+        Text('只显示已加入本自习室的用户 · 专注时长为本人本机累计')
+          .fontSize(11.5).fontColor('#84917D').margin({ top: 2, bottom: 12 })
+
+        if (this.rankLoading) {
+          Text('加载中…').fontSize(13).fontColor('#84917D').margin({ top: 10, bottom: 10 })
+        } else if (this.rankMembers.length === 0) {
+          Text('暂无成员').fontSize(13).fontColor('#84917D').margin({ top: 10, bottom: 10 })
+        } else {
+          ForEach(this.rankMembers, (r: RankMemberView, i: number) => {
+            Row() {
+              Row() {
+                Text((i + 1) + '')
+                  .fontSize(13).fontWeight(FontWeight.Medium)
+                  .fontColor(i < 3 ? '#FFFFFF' : '#B4BFAE')
+              }
+              .width(24).height(24).borderRadius(12)
+              .backgroundColor(i === 0 ? '#D9A441' : i === 1 ? '#9AA6B2' : i === 2 ? '#C08A5E' : Color.Transparent)
+              .justifyContent(FlexAlign.Center)
+
+              Text(r.name)
+                .fontSize(14).fontColor('#2C3A28').layoutWeight(1).margin({ left: 10 })
+                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+
+              if (r.role === '房主') {
+                Text('房主')
+                  .fontSize(10).fontColor('#D9A441')
+                  .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                  .borderRadius(99)
+                  .backgroundColor('#F4E8CE')
+                  .margin({ right: 8 })
+              }
+
+              Text(r.minutes >= 0 ? (r.minutes + ' 分钟') : '—')
+                .fontSize(13)
+                .fontColor(r.minutes >= 0 ? '#4C7A3E' : '#B4BFAE')
+            }
+            .width('100%')
+            .padding({ top: 10, bottom: 10 })
+            .border({ width: { bottom: 1 }, color: '#E3E9DB' })
+          }, (r: RankMemberView) => r.name)
+        }
+
+        Row() {
+          Text('关闭').fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Medium)
+        }
+        .width('100%').height(44).borderRadius(13)
+        .backgroundColor('#6E9B57')
+        .justifyContent(FlexAlign.Center)
+        .margin({ top: 16 })
+        .onClick(() => { this.showRank = false; })
+      }
+      .width(300).padding(22)
+      .backgroundColor('#FFFFFF').borderRadius(22)
+    }
+  }
+
+  continueFocus() {
+    this.showContinue = false;
+    this.elapsedSec = 0;
+    this.remainingSec = this.durationSec;
+    this.startTs = 0;
+    this.running = false;
+    this.ringTick += 1;
+    this.drawRing();
+  }
+
+  @Builder
+  continuePanel() {
+    Stack() {
+      Column()
+        .width('100%').height('100%')
+        .backgroundColor('rgba(30,40,26,0.42)')
+        .onClick(() => {})
+      Column() {
+        Text('专注完成！').fontFamily('serif').fontSize(18).fontColor('#2C3A28')
+        Text('本次已记录 1 个番茄，是否继续专注？')
+          .fontSize(12.5).fontColor('#84917D').lineHeight(20)
+          .textAlign(TextAlign.Center).margin({ top: 8 })
+        Row({ space: 10 }) {
+          Row() {
+            Text('否').fontSize(14).fontColor('#84917D')
+          }
+          .layoutWeight(1).height(44).borderRadius(13)
+          .border({ width: 1, color: '#E3E9DB' })
+          .justifyContent(FlexAlign.Center)
+          .onClick(() => {
+            this.showContinue = false;
+            router.back();
+          })
+
+          Row() {
+            Text('是').fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Medium)
+          }
+          .layoutWeight(1).height(44).borderRadius(13)
+          .backgroundColor('#6E9B57')
+          .justifyContent(FlexAlign.Center)
+          .onClick(() => { this.continueFocus(); })
+        }
+        .width('100%').margin({ top: 18 })
+      }
+      .width(286).padding(22)
+      .backgroundColor('#FFFFFF').borderRadius(22)
+      .alignItems(HorizontalAlign.Center)
+    }
   }
 
   startTimer() {
@@ -153,6 +357,11 @@ struct Focus {
     AppState.instance.stats[key] = s;
     AppState.recomputeStreak();
     AppState.saveUser();
+    if (this.roomId.length > 0) {
+      const mins = Math.floor(this.elapsedSec / 60);
+      AppState.addRoomFocus(this.roomId, mins);
+      this.reportRoomFocus(mins);
+    }
 
     if (success) {
       const idx = AppState.instance.tasks.findIndex(t => t.id === this.taskId);
@@ -177,10 +386,27 @@ struct Focus {
     AppState.saveChallenge();
 
     if (success) {
-      router.replaceUrl({ url: 'pages/Complete', params: { taskId: this.taskId, exp: 20 } });
+      if (this.roomId.length > 0) {
+        // 自习室模式：不跳首页，弹窗询问是否继续专注
+        this.showContinue = true;
+      } else {
+        const p: Record<string, Object> = {};
+        p['taskId'] = this.taskId;
+        p['exp'] = 20;
+        router.replaceUrl({ url: 'pages/Complete', params: p });
+      }
     } else {
       router.back();
     }
+  }
+
+  // 提前退出：未开始计时可直接退出；开始过（专注中/已暂停）需选择中断原因
+  requestExit() {
+    if (this.elapsedSec === 0 && !this.running) {
+      router.back();
+      return;
+    }
+    this.showQuit = true;
   }
 
   // 提前退出：不计入番茄，记录中断原因
@@ -213,7 +439,7 @@ struct Focus {
             .justifyContent(FlexAlign.Center)
 
             Column() {
-              Text('正在专注').fontSize(12).fontColor(this.dim())
+              Text(this.roomId.length > 0 ? '正在自习' : '正在专注').fontSize(12).fontColor(this.dim())
               Text(this.title())
                 .fontSize(16).fontWeight(FontWeight.Medium)
                 .fontColor(this.ink())
@@ -222,6 +448,15 @@ struct Focus {
             .alignItems(HorizontalAlign.Start)
           }
           Blank()
+          if (this.roomId.length > 0) {
+            Text('🏆 排行')
+              .fontSize(12).fontColor(this.ink())
+              .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+              .backgroundColor('rgba(255,255,255,0.22)')
+              .borderRadius(99)
+              .margin({ right: 8 })
+              .onClick(() => { this.openRank(); })
+          }
           Text('第 ' + this.curPomodoro() + ' 个番茄')
             .fontSize(12)
             .fontColor(this.dim())
@@ -353,7 +588,7 @@ struct Focus {
               Text('🚪').fontSize(14)
               Text('提前退出').fontSize(13).fontColor(this.dim())
             }
-            .onClick(() => { this.showQuit = true; })
+            .onClick(() => { this.requestExit(); })
 
             Blank()
 
@@ -374,6 +609,12 @@ struct Focus {
 
       if (this.showQuit) {
         this.quitPanel()
+      }
+      if (this.showRank) {
+        this.rankPanel()
+      }
+      if (this.showContinue) {
+        this.continuePanel()
       }
     }
   }

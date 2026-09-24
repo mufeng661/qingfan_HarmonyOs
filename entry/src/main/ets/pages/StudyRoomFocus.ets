@@ -1,12 +1,13 @@
 import { router } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
-import { themeOf, BACKGROUNDS, WHITE_NOISES, StudyRoom } from '../model/Types';
+import { themeOf, BACKGROUNDS, WHITE_NOISES } from '../model/Types';
 import { formatMMSS, genId, todayKey } from '../model/Store';
 
 @Entry
 @Component
 struct StudyRoomFocus {
   @State roomId: string = '';
+  @State roomName: string = '';
   @State durationSec: number = 25 * 60;
   @State remainingSec: number = 25 * 60;
   @State elapsedSec: number = 0;
@@ -14,7 +15,6 @@ struct StudyRoomFocus {
   @State bgKey: string = 'sky';
   @State noiseKey: string = 'mute';
   @State showPanel: boolean = false;
-  @State memberCount: number = 0;
   @State treeTick: number = 0;
   private timerId: number = -1;
 
@@ -22,9 +22,8 @@ struct StudyRoomFocus {
     const p = router.getParams() as Record<string, Object>;
     if (p) {
       this.roomId = (p['roomId'] ?? '') as string;
+      this.roomName = (p['roomName'] ?? '自习室') as string;
     }
-    const r = AppState.instance.rooms.find(x => x.id === this.roomId);
-    if (r) this.memberCount = r.onlineCount;
 
     const first = AppState.instance.tasks.filter(t => t.status === 'todo')[0];
     if (first) {
@@ -62,12 +61,6 @@ struct StudyRoomFocus {
 
   finishFocus() {
     this.pauseTimer();
-    const r = AppState.instance.rooms.find(x => x.id === this.roomId);
-    if (r) {
-      r.todayMinutes += Math.floor(this.elapsedSec / 60);
-      r.events = [AppState.instance.user?.nickname + ' 在 ' + r.name + ' 完成 1 个番茄', ...r.events];
-      AppState.saveRooms();
-    }
     // 加统计
     const k = todayKey();
     const s = AppState.instance.stats[k] ?? { date: k, focusMinutes: 0, pomodoroCount: 0, doneTaskCount: 0, interruptCounts: {} };
@@ -104,9 +97,9 @@ struct StudyRoomFocus {
           .padding({ left: 8, right: 8 })
           .onClick(() => { router.back(); })
         Column() {
-          Text((AppState.instance.rooms.find(r => r.id === this.roomId)?.name) ?? '自习室')
+          Text(this.roomName.length > 0 ? this.roomName : '自习室')
             .fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-          Text(this.memberCount + ' 人在线 · 一起专注中')
+          Text('一起专注中')
             .fontSize(11).fontColor('#FFFFFFCC').margin({ top: 2 })
         }
         .layoutWeight(1)

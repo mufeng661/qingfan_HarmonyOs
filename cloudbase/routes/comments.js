@@ -6,8 +6,8 @@
 // ----
 // 数据表 public.comments（CloudBase PostgreSQL）字段：
 //   id           bigint  PK, IDENTITY 自增（插入时省略，由数据库分配）
-//   project_id   varchar NOT NULL  页面/项目键（如 'echong' / 'my-site' / 'smart-farm'）
-//   parent_id    bigint  NULL       父评论 id；NULL = 一级评论（自引用 + 级联外键）
+//   project_id   varchar NOT NULL  留言板键（如 'qingfan'，单板可固定同一值）
+//   parent_id    bigint  NULL       父留言 id；NULL = 一级留言（自引用 + 级联外键）
 //   nickname     varchar NOT NULL   昵称
 //   content      varchar NOT NULL   内容
 //   role         varchar 默认 'guest'（登录用户可传 'user'）
@@ -69,16 +69,16 @@ async function create({ project_id, parent_id, nickname, content, role }) {
     // id 省略，由 IDENTITY 自动生成
   };
 
-  // 若是回复，校验父评论存在且属于同一 project_id（避免跨项目挂接）
+  // 若是回复，校验父留言存在且属于同一 project_id（避免跨板挂接）
   if (row.parent_id != null) {
     const { data: p, error: e2 } = await db
-      .from('comments')
+      .from('comments_self')
       .select('id', 'project_id')
       .eq('id', row.parent_id)
       .single();
     if (e2) throw e2;
     if (!p) throw new Error('parent_id 不存在');
-    if (p.project_id !== row.project_id) throw new Error('父评论不属于同一 project_id');
+    if (p.project_id !== row.project_id) throw new Error('父留言不属于同一 project_id');
   }
 
   const { data, error } = await db.from('comments_self').insert(row).select();
@@ -89,8 +89,8 @@ async function create({ project_id, parent_id, nickname, content, role }) {
 async function remove(id) {
   const nid = Number(id);
   if (!Number.isInteger(nid)) throw new Error('id 非法');
-  // 级联删除其子评论（表上 ON DELETE CASCADE）
-  const { error } = await db.from('comments').delete().eq('id', nid);
+  // 级联删除其子留言（表上 ON DELETE CASCADE）
+  const { error } = await db.from('comments_self').delete().eq('id', nid);
   if (error) throw error;
   return { deleted: true };
 }

@@ -17,3 +17,10 @@
 *.p12
 *.jks
 *.keystore
+
+# 本地私密配置（含 CloudBase 密钥）
+entry/src/main/ets/model/CloudConfig.ets
+
+# AI 技能包（第三方安装，可用 npx skills add 复原，不入库）
+/.agents
+/skills-lock.json

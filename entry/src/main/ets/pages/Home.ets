@@ -85,6 +85,13 @@ struct Home {
     }
   }
 
+  onPageShow() {
+    this.lastDayKey = todayKey();
+    this.refreshTodayStats();
+    this.refreshTasks();
+    this.syncUserState();
+  }
+
   syncUserState() {
     const s = AppState.recomputeStreak();
     AppState.saveUser();

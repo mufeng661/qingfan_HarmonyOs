@@ -14,6 +14,7 @@ const KEY_THEME = 'qf_theme';
 const KEY_CHALLENGE_GOAL = 'qf_challenge_goal';
 const KEY_DONE_COUNT = 'qf_done_count';
 const KEY_SIGN_WEEK = 'qf_sign_week';
+const KEY_ROOM_FOCUS = 'qf_room_focus';
 
 // 全局状态单例
 @Observed
@@ -31,6 +32,7 @@ export class AppState {
   badges: BadgeItem[] = [];
   challengeGoal: number = 4;
   doneCountToday: number = 0;
+  roomFocus: Record<string, number> = {};
 
   // 自习室
   rooms: StudyRoom[] = [];
@@ -44,6 +46,19 @@ export class AppState {
 
   static theme(): ThemeDef {
     return themeOf(AppState.instance.themeKey);
+  }
+
+  // 业务数据按「账号」隔离：已登录用手机号，游客用 guest
+  private static owner(): string {
+    const u = AppState.instance.user;
+    if (u !== null && u.phone !== '') {
+      return u.phone;
+    }
+    return 'guest';
+  }
+
+  private static dk(base: string): string {
+    return base + '_' + AppState.owner();
   }
 
   // ============= 初始化 =============
@@ -69,37 +84,39 @@ export class AppState {
       Store.setObj(KEY_ACCOUNT, acc);
     }
 
-    if (AppState.isLoggedIn()) {
-      s.tasks = await Store.getArr<TaskItem>(KEY_TASKS);
-      s.records = await Store.getArr<FocusRecord>(KEY_RECORDS);
-      s.stats = await Store.getObj<Record<string, DailyStats>>(KEY_STATS) ?? {};
-      s.challengeGoal = await Store.getInt(KEY_CHALLENGE_GOAL, 4);
-      s.doneCountToday = await Store.getInt(KEY_DONE_COUNT, 0);
-    } else {
-      // 游客态不保留业务数据：待办、专注记录、今日统计与挑战一律从空白开始
-      s.tasks = [];
-      s.records = [];
-      s.stats = {};
-      s.challengeGoal = 4;
-      s.doneCountToday = 0;
-      Store.setArr(KEY_TASKS, []);
-      Store.setArr(KEY_RECORDS, []);
-      const emptyStats: Record<string, DailyStats> = {};
-      Store.setObj(KEY_STATS, emptyStats);
-      Store.setInt(KEY_CHALLENGE_GOAL, 4);
-      Store.setInt(KEY_DONE_COUNT, 0);
-    }
-
-    s.badges = await Store.getArr<BadgeItem>(KEY_BADGES);
-    if (s.badges.length === 0) {
-      s.badges = AppState.copyBadges(BADGE_CATALOG);
-      Store.setArr(KEY_BADGES, s.badges);
-    }
+    await AppState.loadBusinessData();
 
     s.rooms = await Store.getArr<StudyRoom>(KEY_ROOMS);
     if (s.rooms.length === 0) {
       s.rooms = AppState.seedRooms();
       Store.setArr(KEY_ROOMS, s.rooms);
+    }
+  }
+
+  // 按当前账号（手机号 / guest）加载业务数据；登录、注册后需重新调用
+  static async loadBusinessData(): Promise<void> {
+    const s = AppState.instance;
+    if (AppState.isLoggedIn()) {
+      s.tasks = await Store.getArr<TaskItem>(AppState.dk(KEY_TASKS));
+      s.records = await Store.getArr<FocusRecord>(AppState.dk(KEY_RECORDS));
+      s.stats = await Store.getObj<Record<string, DailyStats>>(AppState.dk(KEY_STATS)) ?? {};
+      s.challengeGoal = await Store.getInt(AppState.dk(KEY_CHALLENGE_GOAL), 4);
+      s.doneCountToday = await Store.getInt(AppState.dk(KEY_DONE_COUNT), 0);
+      s.roomFocus = await Store.getObj<Record<string, number>>(AppState.dk(KEY_ROOM_FOCUS)) ?? {};
+      s.badges = await Store.getArr<BadgeItem>(AppState.dk(KEY_BADGES));
+      if (s.badges.length === 0) {
+        s.badges = AppState.copyBadges(BADGE_CATALOG);
+        Store.setArr(AppState.dk(KEY_BADGES), s.badges);
+      }
+    } else {
+      // 游客态不保留业务数据：一律从空白开始
+      s.tasks = [];
+      s.records = [];
+      s.stats = {};
+      s.challengeGoal = 4;
+      s.doneCountToday = 0;
+      s.roomFocus = {};
+      s.badges = AppState.copyBadges(BADGE_CATALOG);
     }
   }
 
@@ -190,19 +207,19 @@ export class AppState {
   }
 
   static async saveTasks(): Promise<void> {
-    await Store.setArr(KEY_TASKS, AppState.instance.tasks);
+    await Store.setArr(AppState.dk(KEY_TASKS), AppState.instance.tasks);
   }
 
   static async saveRecords(): Promise<void> {
-    await Store.setArr(KEY_RECORDS, AppState.instance.records);
+    await Store.setArr(AppState.dk(KEY_RECORDS), AppState.instance.records);
   }
 
   static async saveStats(): Promise<void> {
-    await Store.setObj(KEY_STATS, AppState.instance.stats);
+    await Store.setObj(AppState.dk(KEY_STATS), AppState.instance.stats);
   }
 
   static async saveBadges(): Promise<void> {
-    await Store.setArr(KEY_BADGES, AppState.instance.badges);
+    await Store.setArr(AppState.dk(KEY_BADGES), AppState.instance.badges);
   }
 
   static async saveRooms(): Promise<void> {
@@ -210,8 +227,8 @@ export class AppState {
   }
 
   static async saveChallenge(): Promise<void> {
-    await Store.setInt(KEY_CHALLENGE_GOAL, AppState.instance.challengeGoal);
-    await Store.setInt(KEY_DONE_COUNT, AppState.instance.doneCountToday);
+    await Store.setInt(AppState.dk(KEY_CHALLENGE_GOAL), AppState.instance.challengeGoal);
+    await Store.setInt(AppState.dk(KEY_DONE_COUNT), AppState.instance.doneCountToday);
   }
 
   static async saveTheme(): Promise<void> {
@@ -231,16 +248,12 @@ export class AppState {
     s.stats = {};
     s.challengeGoal = 4;
     s.doneCountToday = 0;
+    s.roomFocus = {};
     s.currentTaskId = '';
     s.currentRoomId = '';
     s.currentRoomMode = '';
     AppState.saveUser();
-    Store.setArr(KEY_TASKS, []);
-    Store.setArr(KEY_RECORDS, []);
-    const emptyStats: Record<string, DailyStats> = {};
-    Store.setObj(KEY_STATS, emptyStats);
-    Store.setInt(KEY_CHALLENGE_GOAL, 4);
-    Store.setInt(KEY_DONE_COUNT, 0);
+    // 账号业务数据保留在其命名空间下（按手机号），下次登录同一账号自动恢复
   }
 
   // 游客用户：未登录也能使用「今日待办 + 专注计时」，phone 为空即视为未登录。
@@ -268,6 +281,15 @@ export class AppState {
     return u !== null && u.phone !== '';
   }
 
+  // 云函数用的稳定用户标识：登录用手机号（跨登录稳定），游客用 harmony-guest
+  static userKey(): string {
+    const u = AppState.instance.user;
+    if (u !== null && u.phone !== '') {
+      return u.phone;
+    }
+    return 'harmony-guest';
+  }
+
   static totalFocusMinutes(): number {
     let m = 0;
     const keys: string[] = Object.keys(AppState.instance.stats);
@@ -275,6 +297,19 @@ export class AppState {
       m += AppState.instance.stats[keys[i]].focusMinutes;
     }
     return m;
+  }
+
+  // 本地累计：本人在某房间的专注时长（分钟）
+  static roomFocusOf(roomId: string): number {
+    const v = AppState.instance.roomFocus[roomId];
+    return v ? v : 0;
+  }
+
+  static addRoomFocus(roomId: string, minutes: number): void {
+    if (roomId.length === 0 || minutes <= 0) return;
+    const cur = AppState.roomFocusOf(roomId);
+    AppState.instance.roomFocus[roomId] = cur + minutes;
+    Store.setObj(AppState.dk(KEY_ROOM_FOCUS), AppState.instance.roomFocus);
   }
 
   static todayKey(): string {

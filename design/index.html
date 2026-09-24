@@ -1,0 +1,2056 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>青番 · AI 番茄钟智能助手（鸿蒙高保真原型）</title>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <style>
+    :root {
+      --bg: #F3F6EE;
+      --surface: #FFFFFF;
+      --surface-2: #EAF1E2;
+      --ink: #2C3A28;
+      --ink-2: #84917D;
+      --ink-3: #B4BFAE;
+      --leaf: #6E9B57;
+      --leaf-deep: #4C7A3E;
+      --leaf-soft: #DCE8CF;
+      --tomato: #E07A5F;
+      --tomato-soft: #F6E1D6;
+      --line: #E3E9DB;
+      --gold: #D9A441;
+      --gold-soft: #F4E8CE;
+      --bar: rgba(255,255,255,0.96);
+      --stage-bg: #EDF2E8;
+      --brand-grad-1: #F7FAF2;
+      --brand-grad-2: #EAF1E2;
+      --font-display: 'Songti SC', 'Noto Serif SC', 'STSong', 'SimSun', serif;
+      --font-body: 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', -apple-system, sans-serif;
+    }
+
+    /* ---- 背景主题：深夜墨 ---- */
+    :root[data-theme="dark"] {
+      --bg: #171C17;
+      --surface: #212822;
+      --surface-2: #2B342B;
+      --ink: #E6EDE3;
+      --ink-2: #97A392;
+      --ink-3: #677262;
+      --leaf: #8CB56F;
+      --leaf-deep: #A9CC8F;
+      --leaf-soft: #33412F;
+      --tomato: #ED8E72;
+      --tomato-soft: #4A332B;
+      --line: #333D32;
+      --gold: #E2B65F;
+      --gold-soft: #463A24;
+      --bar: rgba(33,40,34,0.96);
+      --stage-bg: #0F130E;
+      --brand-grad-1: #1A211A;
+      --brand-grad-2: #121712;
+    }
+
+    /* ---- 背景主题：晨光暖 ---- */
+    :root[data-theme="dawn"] {
+      --bg: #FBF3E9;
+      --surface: #FFFDF9;
+      --surface-2: #F3E7D7;
+      --ink: #4A3A2B;
+      --ink-2: #9A8A76;
+      --ink-3: #C4B5A2;
+      --leaf: #C08A4E;
+      --leaf-deep: #A8743C;
+      --leaf-soft: #EFDFC6;
+      --tomato: #D96B4E;
+      --tomato-soft: #F6E1D6;
+      --line: #EDE0CE;
+      --gold: #D9A441;
+      --gold-soft: #F4E8CE;
+      --bar: rgba(255,253,249,0.96);
+      --stage-bg: #EFE6D8;
+      --brand-grad-1: #FCF6EC;
+      --brand-grad-2: #F1E6D4;
+    }
+
+    /* ---- 背景主题：静谧蓝 ---- */
+    :root[data-theme="ocean"] {
+      --bg: #EEF3F6;
+      --surface: #FFFFFF;
+      --surface-2: #E2ECF2;
+      --ink: #26343F;
+      --ink-2: #7C8E9A;
+      --ink-3: #AEBFC8;
+      --leaf: #5C8BA6;
+      --leaf-deep: #42718C;
+      --leaf-soft: #D8E6EE;
+      --tomato: #E07A5F;
+      --tomato-soft: #F6E1D6;
+      --line: #DEE8EE;
+      --gold: #D9A441;
+      --gold-soft: #F4E8CE;
+      --bar: rgba(255,255,255,0.96);
+      --stage-bg: #E4ECF1;
+      --brand-grad-1: #F3F8FA;
+      --brand-grad-2: #E4EEF3;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; width: 100%; }
+    body {
+      font-family: var(--font-body);
+      background: var(--stage-bg);
+      color: var(--ink);
+      transition: background 0.4s ease;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      overflow: hidden;
+    }
+    #root { height: 100vh; width: 100vw; }
+    .serif { font-family: var(--font-display); }
+
+    /* 页面外层布局 */
+    .stage-wrap {
+      height: 100vh; width: 100vw;
+      display: flex; align-items: center; justify-content: center;
+      gap: 56px; padding: 40px;
+    }
+    .stage-side {
+      width: 300px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 28px;
+    }
+    .stage-brand { display: flex; align-items: center; gap: 12px; }
+    .stage-brand .mark { width: 44px; height: 44px; flex-shrink: 0; }
+    .stage-brand .name { font-family: var(--font-display); font-size: 26px; letter-spacing: 0.02em; }
+    .stage-brand .en { font-size: 11px; color: var(--ink-2); letter-spacing: 0.28em; margin-top: 2px; }
+    .stage-tagline { font-family: var(--font-display); font-size: 15px; color: var(--ink-2); line-height: 1.7; }
+    .stage-modules { display: flex; flex-direction: column; gap: 0; }
+    .stage-modules .title { font-size: 12px; letter-spacing: 0.2em; color: var(--ink-3); margin-bottom: 14px; }
+    .stage-module {
+      display: flex; align-items: center; gap: 12px;
+      padding: 9px 0; font-size: 14px; color: var(--ink);
+      border-bottom: 1px solid var(--line);
+    }
+    .stage-module .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--leaf); flex-shrink: 0; }
+    .stage-module.done .dot { background: var(--tomato); }
+    .stage-module .num { font-size: 11px; color: var(--ink-3); margin-left: auto; font-family: var(--font-display); }
+    .stage-hint {
+      font-size: 12.5px; color: var(--ink-2); line-height: 1.8;
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 14px; padding: 14px 16px;
+    }
+    .stage-hint b { color: var(--leaf-deep); font-weight: 600; }
+
+    .phone-col { display: flex; align-items: center; justify-content: center; }
+    @media (max-width: 960px) {
+      .stage-side { display: none; }
+      .stage-wrap { gap: 0; padding: 20px; }
+    }
+
+    /* 通用动画 */
+    @keyframes floatY { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+    @keyframes growIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes fadeUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes wave { 0%,100% { transform: scaleY(0.5); } 50% { transform: scaleY(1); } }
+    @keyframes leafSway { 0%,100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+    @keyframes confetti { 0% { transform: translateY(0) rotate(0); opacity: 1; } 100% { transform: translateY(-70px) rotate(40deg); opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+    /* ============================================================
+       设计令牌
+    ============================================================ */
+    const T = {
+      bg: 'var(--bg)', surface: 'var(--surface)', surface2: 'var(--surface-2)',
+      ink: 'var(--ink)', ink2: 'var(--ink-2)', ink3: 'var(--ink-3)',
+      leaf: 'var(--leaf)', leafDeep: 'var(--leaf-deep)', leafSoft: 'var(--leaf-soft)',
+      tomato: 'var(--tomato)', tomatoSoft: 'var(--tomato-soft)',
+      line: 'var(--line)', gold: 'var(--gold)', goldSoft: 'var(--gold-soft)',
+      display: 'var(--font-display)', body: 'var(--font-body)',
+    };
+
+    /* ============================================================
+       图标库（自制线性 SVG，stroke 风格）
+    ============================================================ */
+    const I = {
+      size: (s) => ({ width: s, height: s, style: { flexShrink: 0 } }),
+      leaf: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 20C4 11 10 5 20 4c0 10-6 16-16 16Z" />
+          <path d="M4 20C8 14 13 10 18 8" />
+        </svg>
+      ),
+      tomato: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 8c-1-2.5-1.5-4-1-5 2.5 1 3.5 3 3.5 5" />
+          <path d="M6 13a6 6 0 0 1 12 0c0 5-2 7.5-6 7.5S6 18 6 13Z" />
+          <path d="M6 13c0-2 2-3 2.5-3.5M18 13c0-2-2-3-2.5-3.5" />
+        </svg>
+      ),
+      clock: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7.5V12l3 2" />
+        </svg>
+      ),
+      chart: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 20V4" />
+          <path d="M7 20v-6M12 20V8M17 20v-3M21 20H3" />
+        </svg>
+      ),
+      trophy: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" />
+          <path d="M7 6H4.5A2.5 2.5 0 0 0 7 10.5M17 6h2.5A2.5 2.5 0 0 1 17 10.5" />
+          <path d="M12 14v3M8 20h8M10 17h4" />
+        </svg>
+      ),
+      user: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+        </svg>
+      ),
+      plus: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+      ),
+      check: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7" /></svg>
+      ),
+      x: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.8" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+      ),
+      play: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 5.5v13l10-6.5L8 5.5Z" /></svg>
+      ),
+      music: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 18V6l11-2v12" /><circle cx="6.5" cy="18" r="2.5" /><circle cx="17.5" cy="16" r="2.5" />
+        </svg>
+      ),
+      flame: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 21c-3.5 0-6-2.5-6-6 0-3 2-4.5 3-6.5C10.5 11 11 12 12 12c1 0 1.5-1.5 1.5-3 2 1.5 4.5 4 4.5 7 0 3-2.5 5-6 5Z" />
+          <path d="M12 21c-2 0-3.5-1.5-3.5-3.5 0-1.8 1.3-2.6 2-3.7" />
+        </svg>
+      ),
+      star: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.5" strokeLinejoin="round">
+          <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.8L12 3.5Z" />
+        </svg>
+      ),
+      gift: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 11h16v9H4zM3 7h18v4H3zM12 7v13M12 7c-2 0-4-1.5-4-3.5S9.5 0 12 3c2.5-3 4 .5 4 3.5S14 7 12 7Z" />
+        </svg>
+      ),
+      rain: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round"><path d="M8 3v4M13 3v3M3 8v4M13 8v4M3 16v2M8 13v2M13 14v2M18 15v2" /></svg>
+      ),
+      wave: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2 9c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2" /><path d="M2 15c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2" />
+        </svg>
+      ),
+      bird: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 15c4 0 5-2 5-5 0 3 2 3 2 3M12 9c3-1 5 1 5 3-2 0-3-1-5-1" /><path d="M4 15c0 2 2 3 4 3" />
+        </svg>
+      ),
+      mute: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 9v6h3l5 4V5L7 9H4Z" /><path d="M16 9l5 6M21 9l-5 6" />
+        </svg>
+      ),
+      logout: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8M10 12h11M18 8l4 4-4 4" />
+        </svg>
+      ),
+      users: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="9" cy="8" r="3.2" />
+          <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
+          <path d="M15.5 5.5a3.2 3.2 0 0 1 0 5M17 13.5a5.5 5.5 0 0 1 3.5 5.5" />
+        </svg>
+      ),
+      book: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5V5.5Z" />
+          <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20" />
+        </svg>
+      ),
+      sparkle: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z" />
+          <path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" />
+        </svg>
+      ),
+      chevronR: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+      ),
+      chevronL: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg>
+      ),
+      tree: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 21v-5" />
+          <path d="M12 16c-3.8 0-6-2.6-6-5.8C6 6.6 9 5 12 7c3-2 6-.4 6 3.2C18 13.4 15.8 16 12 16Z" />
+          <path d="M12 7c-1-1.6-2.8-2.4-4.6-2.4M12 7c1-1.6 2.8-2.4 4.6-2.4" />
+        </svg>
+      ),
+      lock: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="5" y="10" width="14" height="10" rx="2.5" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+        </svg>
+      ),
+      grid: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
+          <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />
+          <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" />
+          <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" />
+        </svg>
+      ),
+      palette: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.9 1.5-2-.3-1 .3-1.8 1.3-1.8h1.5a3 3 0 0 0 3-3c0-5-3.3-8.2-7.3-8.2Z" />
+          <circle cx="7.8" cy="11" r="1.15" fill={c} stroke="none" />
+          <circle cx="11.2" cy="7.6" r="1.15" fill={c} stroke="none" />
+          <circle cx="15.6" cy="8" r="1.15" fill={c} stroke="none" />
+        </svg>
+      ),
+      sun: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2.5v2M12 19.5v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2.5 12h2M19.5 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+        </svg>
+      ),
+      moon: (s=20, c='currentColor') => (
+        <svg viewBox="0 0 24 24" fill="none" {...I.size(s)} stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z" />
+        </svg>
+      ),
+    };
+
+    /* 品牌 Logo：番茄 + 叶子 */
+    function LeafLogo({ size=44 }) {
+      return (
+        <svg viewBox="0 0 48 48" width={size} height={size} fill="none">
+          <circle cx="24" cy="25" r="17" fill={T.tomato} />
+          <path d="M24 25c0-6 2-10 5-11.5C28 17.5 27 21 24 25Z" fill="#fff" opacity="0.35" />
+          <path d="M24 12c-1.5-4-4-5.5-6-6 0 3.5 2 6 4 7" fill={T.leaf} />
+          <path d="M28 14c0-3 2-4.5 4-5 .2 2.8-1 4.5-3 5" fill={T.leafDeep} />
+          <path d="M24 22c-1-1.5-2.5-2-3.5-2" stroke="#fff" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
+        </svg>
+      );
+    }
+
+    /* ============================================================
+       鸿蒙设备框（居中挖孔 + 底部手势条）
+    ============================================================ */
+    function HarmonyFrame({ children, width=393, height=852, dark=false }) {
+      const ink = dark ? '#fff' : '#111';
+      return (
+        <div style={{ display: 'inline-block', padding: 11, background: '#11130f', borderRadius: 56, boxShadow: '0 0 0 2px #2b2f28, 0 30px 70px rgba(40,55,35,0.35)' }}>
+          <div style={{ position: 'relative', width, height, borderRadius: 45, overflow: 'hidden', background: dark ? '#1c2418' : '#fff' }}>
+            {/* 状态栏 */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 22px', color: ink, zIndex: 20, pointerEvents: 'none', fontSize: 13, fontWeight: 500, fontFamily: T.body }}>
+              <span>09:41</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor">
+                  <rect x="0" y="7" width="3" height="4" rx="0.5" /><rect x="4.5" y="5" width="3" height="6" rx="0.5" />
+                  <rect x="9" y="3" width="3" height="8" rx="0.5" /><rect x="13.5" y="1" width="2" height="10" rx="0.5" />
+                </svg>
+                <svg width="16" height="11" viewBox="0 0 16 11" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                  <path d="M1.5 8.5a4.5 4.5 0 0 1 9 0" /><path d="M4 5.5a7 7 0 0 1 11 0" />
+                  <circle cx="13.2" cy="9.4" r="1.1" fill="currentColor" stroke="none" />
+                </svg>
+                <div style={{ position: 'relative', width: 22, height: 11, border: '1.5px solid currentColor', borderRadius: 3, opacity: 0.85 }}>
+                  <div style={{ position: 'absolute', top: 1.5, left: 1.5, width: '70%', height: 'calc(100% - 3px)', background: 'currentColor', borderRadius: 1.5 }} />
+                  <div style={{ position: 'absolute', top: 3, right: -4, width: 2, height: 5, background: 'currentColor', borderRadius: 1 }} />
+                </div>
+              </div>
+            </div>
+            {/* 居中挖孔 */}
+            <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', width: 12, height: 12, borderRadius: '50%', background: '#000', zIndex: 30 }} />
+            {/* 内容 */}
+            <div style={{ position: 'absolute', top: 40, left: 0, right: 0, bottom: 28, overflow: 'hidden' }}>
+              {children}
+            </div>
+            {/* 手势条 */}
+            <div style={{ position: 'absolute', bottom: 9, left: '50%', transform: 'translateX(-50%)', width: 118, height: 4.5, background: dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.28)', borderRadius: 99, zIndex: 10 }} />
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       通用小组件
+    ============================================================ */
+    function Modal({ children, onClose, width=300 }) {
+      return (
+        <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(30,40,26,0.42)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width, background: T.surface, borderRadius: 22, padding: 22, boxShadow: '0 24px 60px rgba(0,0,0,0.2)', animation: 'growIn 0.25s ease' }}>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    function Toast({ msg, icon }) {
+      return (
+        <div style={{ position: 'absolute', top: 58, left: 0, right: 0, zIndex: 200, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', background: 'rgba(44,58,40,0.92)', color: '#fff', borderRadius: 99, fontSize: 12.5, fontWeight: 500, boxShadow: '0 10px 24px rgba(0,0,0,0.18)', animation: 'fadeUp 0.28s ease', backdropFilter: 'blur(4px)' }}>
+            {icon}{msg}
+          </div>
+        </div>
+      );
+    }
+
+    function Pill({ children, active, onClick, color }) {
+      return (
+        <div onClick={onClick} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+          padding: '7px 13px', borderRadius: 99, fontSize: 12.5,
+          background: active ? (color || T.leaf) : 'transparent',
+          color: active ? '#fff' : T.ink2,
+          border: active ? '1px solid transparent' : `1px solid ${T.line}`,
+          transition: 'all 0.2s',
+        }}>{children}</div>
+      );
+    }
+
+    function Switch({ on, onToggle }) {
+      return (
+        <div onClick={onToggle} style={{ width: 46, height: 27, borderRadius: 99, background: on ? T.leaf : T.surface2, border: `1px solid ${on ? T.leaf : T.line}`, position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
+          <div style={{ position: 'absolute', top: 2, left: on ? 21 : 2, width: 21, height: 21, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
+        </div>
+      );
+    }
+
+    /* ============================================================
+       开场引导页（价值主张：为什么选择青番）
+    ============================================================ */
+    function ScreenOnboarding({ onDone }) {
+      const [step, setStep] = useState(0);
+      const steps = [
+        {
+          key: 'ai',
+          icon: I.sparkle,
+          color: T.leaf,
+          tag: 'AI 更懂你',
+          title: '会思考的番茄钟',
+          pain: '普通番茄钟只会倒数，不懂你何时效率高、为什么分心。',
+          fix: '青番用 AI 分析专注数据，自动排待办、推荐最佳专注时段、洞察每一次打断。',
+        },
+        {
+          key: 'todo',
+          icon: I.tomato,
+          color: T.tomato,
+          tag: '待办 + 专注',
+          title: '列好计划，一键开始',
+          pain: '待办清单和计时器是两套工具，列了计划却总懒得开始。',
+          fix: '先列今日计划，长按拖动或让 AI 按难易自动排序，点「开始」直接进入锁屏倒计时。',
+        },
+        {
+          key: 'study',
+          icon: I.users,
+          color: T.leafDeep,
+          tag: '自习室 · 共学',
+          title: '坚持，不再孤单',
+          pain: '一个人专注最容易半途而废。',
+          fix: '在自习室和朋友一起自习、互相监督；签到经验、好友排行，让每一份坚持都有回响。',
+        },
+        {
+          key: 'growth',
+          icon: I.chart,
+          color: T.gold,
+          tag: '看得见的成长',
+          title: '每一天都在进步',
+          pain: '努力过却看不到记录，动力慢慢就散了。',
+          fix: '专注时长分布、高效时段、每日完成时间轴，把你的成长清清楚楚地记下来。',
+        },
+      ];
+      const last = step === steps.length - 1;
+      const cur = steps[step];
+      return (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: `linear-gradient(180deg, var(--brand-grad-1) 0%, var(--brand-grad-2) 100%)`, position: 'relative', overflow: 'hidden' }}>
+          {!last && (
+            <div onClick={onDone} style={{ position: 'absolute', top: 16, right: 20, zIndex: 5, fontSize: 13, color: T.ink3, cursor: 'pointer', padding: '8px 12px' }}>跳过</div>
+          )}
+
+          <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+            <div style={{ display: 'flex', height: '100%', transform: `translateX(-${step * 100}%)`, transition: 'transform 0.38s cubic-bezier(0.22,1,0.36,1)' }}>
+              {steps.map(s => (
+                <div key={s.key} style={{ minWidth: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 40px 110px', boxSizing: 'border-box' }}>
+                  <div style={{ width: 96, height: 96, borderRadius: 30, background: '#fff', boxShadow: `0 18px 42px rgba(110,155,87,0.18)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, marginBottom: 28, animation: 'growIn 0.45s ease' }}>
+                    {s.icon(46)}
+                  </div>
+                  <div style={{ fontSize: 12, letterSpacing: 0.18, color: s.color, fontWeight: 600, padding: '5px 15px', borderRadius: 99, background: `rgba(110,155,87,0.10)`, marginBottom: 16 }}>{s.tag}</div>
+                  <div className="serif" style={{ fontSize: 27, letterSpacing: 0.02, marginBottom: 18 }}>{s.title}</div>
+                  <div style={{ fontSize: 13, lineHeight: 1.75, color: T.ink2, textAlign: 'center', maxWidth: 268 }}>
+                    <span style={{ color: T.ink3 }}>{s.pain}</span>
+                    <span style={{ display: 'block', marginTop: 10, color: T.ink }}>{s.fix}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 34px 38px', display: 'flex', flexDirection: 'column', gap: 22 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+              {steps.map((s, i) => (
+                <div key={s.key} onClick={() => setStep(i)} style={{ width: i === step ? 22 : 7, height: 7, borderRadius: 99, background: i === step ? T.leaf : 'rgba(44,58,40,0.18)', transition: 'all 0.3s', cursor: 'pointer' }} />
+              ))}
+            </div>
+            <div onClick={last ? onDone : () => setStep(step + 1)} style={{
+              padding: '15px', background: T.leaf, color: '#fff', borderRadius: 14, textAlign: 'center', fontSize: 15, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.08em',
+              boxShadow: `0 10px 24px rgba(110,155,87,0.32)`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'transform 0.15s',
+            }} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}>
+              {last ? '开始使用' : '下一步'}{!last && I.chevronR(16)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       登录页
+    ============================================================ */
+    function ScreenLogin({ onLogin }) {
+      const [mode, setMode] = useState('login');
+      const [phone, setPhone] = useState('138 0000 8888');
+      const [pwd, setPwd] = useState('123456');
+      const [name, setName] = useState('');
+      const [regPwd, setRegPwd] = useState('');
+      const [regPwd2, setRegPwd2] = useState('');
+      const [code, setCode] = useState('1234');
+      const [gotCode, setGotCode] = useState(false);
+      const field = { display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', background: T.surface, borderRadius: 14, border: `1px solid ${T.line}` };
+      const inp = { border: 'none', outline: 'none', flex: 1, fontSize: 15, fontFamily: T.body, color: T.ink, background: 'transparent' };
+      return (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: `linear-gradient(180deg, var(--brand-grad-1) 0%, var(--brand-grad-2) 100%)`, position: 'relative', overflow: 'hidden' }}>
+          <svg viewBox="0 0 400 300" style={{ position: 'absolute', top: -40, right: -60, width: 300, opacity: 0.10 }}>
+            <path d="M40 260C60 140 160 60 300 30c-20 120-120 190-240 220" fill={T.leaf} />
+            <path d="M80 280c10-80 60-140 130-170" stroke={T.leafDeep} strokeWidth="2" fill="none" />
+          </svg>
+
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '0 40px', animation: 'fadeUp 0.5s ease' }}>
+            <div style={{ animation: 'leafSway 3s ease-in-out infinite' }}><LeafLogo size={68} /></div>
+            <div className="serif" style={{ fontSize: 30, letterSpacing: 0.04, marginTop: 4 }}>青番</div>
+            <div style={{ fontSize: 11, letterSpacing: 0.34, color: T.ink3 }}>QINGFAN · AI POMODORO</div>
+          </div>
+
+          <div style={{ padding: '0 34px 40px', animation: 'fadeUp 0.6s 0.1s ease both' }}>
+            <div style={{ display: 'flex', padding: 4, borderRadius: 14, background: T.surface2, marginBottom: 16 }}>
+              {[['登录', 'login'], ['注册', 'register']].map(([label, key]) => (
+                <div key={key} onClick={() => setMode(key)} style={{ flex: 1, textAlign: 'center', padding: '10px 0', borderRadius: 11, fontSize: 13.5, fontWeight: mode === key ? 700 : 400, color: mode === key ? T.leafDeep : T.ink2, background: mode === key ? T.surface : 'transparent', cursor: 'pointer' }}>{label}</div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {mode === 'register' && (
+                <div style={field}>
+                  <input value={name} onChange={e => setName(e.target.value)} placeholder="用户名" style={inp} />
+                </div>
+              )}
+              <div style={field}>
+                <span style={{ fontSize: 13, color: T.ink3, width: 22 }}>+86</span>
+                <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="手机号" style={inp} />
+              </div>
+              <div style={field}>
+                <input value={mode === 'login' ? pwd : regPwd} onChange={e => (mode === 'login' ? setPwd(e.target.value) : setRegPwd(e.target.value))} type="password" placeholder={mode === 'login' ? '密码' : '密码（至少 6 位）'} style={inp} />
+              </div>
+              {mode === 'register' && (
+                <>
+                  <div style={field}>
+                    <input value={regPwd2} onChange={e => setRegPwd2(e.target.value)} type="password" placeholder="确认密码" style={inp} />
+                  </div>
+                  <div style={field}>
+                    <input value={code} onChange={e => setCode(e.target.value)} placeholder="验证码" style={{ ...inp, letterSpacing: '0.2em' }} />
+                    <span onClick={() => setGotCode(true)} style={{ fontSize: 12, color: gotCode ? T.ink3 : T.leafDeep, cursor: 'pointer', whiteSpace: 'nowrap' }}>{gotCode ? '已发送' : '获取验证码'}</span>
+                  </div>
+                </>
+              )}
+              <div onClick={onLogin} style={{
+                marginTop: 6, padding: '15px', background: T.leaf, color: '#fff', borderRadius: 14,
+                textAlign: 'center', fontSize: 15, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.1em',
+                boxShadow: `0 10px 24px rgba(110,155,87,0.32)`, transition: 'transform 0.15s',
+              }} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}>
+                {mode === 'login' ? '登录' : '注册'}
+              </div>
+              <div style={{ textAlign: 'center', fontSize: 11, color: T.ink3, marginTop: 4 }}>
+                {mode === 'login' ? '演示账号：13800008888 · 密码 123456' : '演示验证码：1234'}
+              </div>
+              <div style={{ textAlign: 'center', fontSize: 11, color: T.ink3 }}>
+                登录即代表同意《用户协议》与《隐私政策》
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       今日（首页）
+    ============================================================ */
+    function ScreenHome({ onStart, onAdd, signed, onSign, tasks, onToggleDone, onReorder, onAiSort, onOpenAi, challengeGoal, onEditGoal }) {
+      const today = '9 月 2 日 · 周三';
+      const doneCount = tasks.filter(t => t.done).length;
+      const focusMin = tasks.filter(t => t.done).reduce((a,b) => a + b.pomos * 25, 0);
+      const [aiSorting, setAiSorting] = useState(false);
+      const [dragIndex, setDragIndex] = useState(null);
+      const [dropIndex, setDropIndex] = useState(null);
+      const dragRef = useRef(null);
+      const listRef = useRef(null);
+      const CARD_H = 72;
+      const runAiSort = () => { setAiSorting(true); setTimeout(() => { onAiSort(); setAiSorting(false); }, 1000); };
+      const diffTag = (d) => {
+        const map = { easy: { label: '简单', c: T.leaf, bg: T.leafSoft }, medium: { label: '中等', c: T.gold, bg: T.goldSoft }, hard: { label: '困难', c: T.tomato, bg: T.tomatoSoft } };
+        const info = map[d] || map.medium;
+        return <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, color: info.c, background: info.bg, fontWeight: 600, marginLeft: 6, flexShrink: 0 }}>{info.label}</span>;
+      };
+      const getOffset = (i) => {
+        if (dragIndex === null || dropIndex === null || dragIndex === dropIndex) return 0;
+        if (dragIndex < dropIndex) { if (i > dragIndex && i <= dropIndex) return -CARD_H; }
+        else { if (i >= dropIndex && i < dragIndex) return CARD_H; }
+        return 0;
+      };
+      const handlePointerDown = (e, index) => {
+        if (tasks[index].done) return;
+        const timer = setTimeout(() => {
+          setDragIndex(index); setDropIndex(index);
+          dragRef.current = { startY: e.clientY, index, currentY: e.clientY, dropIndex: index };
+          document.body.style.userSelect = 'none';
+        }, 400);
+        let moveHandler = null;
+        const upHandler = () => {
+          clearTimeout(timer);
+          if (moveHandler) window.removeEventListener('pointermove', moveHandler);
+          if (dragRef.current) {
+            const finalIdx = dragRef.current.dropIndex !== undefined ? dragRef.current.dropIndex : dragRef.current.index;
+            if (finalIdx !== dragRef.current.index) onReorder(dragRef.current.index, finalIdx);
+            setDragIndex(null); setDropIndex(null);
+            dragRef.current = null; document.body.style.userSelect = '';
+          }
+        };
+        moveHandler = (ev) => {
+          if (!dragRef.current) return;
+          dragRef.current.currentY = ev.clientY;
+          const list = listRef.current; if (!list) return;
+          const listRect = list.getBoundingClientRect();
+          const idx = Math.max(0, Math.min(Math.round((ev.clientY - listRect.top) / CARD_H), tasks.length - 1));
+          dragRef.current.dropIndex = idx;
+          setDropIndex(idx);
+        };
+        window.addEventListener('pointerup', upHandler, { once: true });
+        window.addEventListener('pointermove', moveHandler);
+      };
+      return (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: T.bg }}>
+          <div style={{ padding: '22px 22px 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div>
+                <div className="serif" style={{ fontSize: 13, color: T.ink2 }}>{today}</div>
+                <div className="serif" style={{ fontSize: 26, marginTop: 4 }}>上午好，小满</div>
+              </div>
+              <div onClick={onSign} style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 14px', borderRadius: 14, background: signed ? T.surface : T.tomatoSoft, border: `1px solid ${signed ? T.line : '#F0C9B8'}` }}>
+                {I.gift(18, signed ? T.ink3 : T.tomato)}
+                <span style={{ fontSize: 11, color: signed ? T.ink3 : T.tomato, fontWeight: 600 }}>{signed ? '已签到' : '签到 +10'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 今日概览 */}
+          <div style={{ margin: '0 22px', padding: '16px 18px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, display: 'flex', justifyContent: 'space-between' }}>
+            {[
+              { k: '专注', v: `${focusMin}`, u: '分钟', icon: I.clock },
+              { k: '番茄', v: doneCount, u: '个', icon: I.tomato },
+              { k: '连续', v: 7, u: '天', icon: I.flame },
+            ].map((it, i) => (
+              <div key={i} style={{ flex: 1, textAlign: 'center', borderRight: i < 2 ? `1px solid ${T.line}` : 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, color: it.icon === I.flame ? T.tomato : T.leafDeep, marginBottom: 5 }}>{it.icon(16)}<span style={{ fontSize: 11, color: T.ink2 }}>{it.k}</span></div>
+                <div className="serif" style={{ fontSize: 22, lineHeight: 1 }}>{it.v}<span style={{ fontSize: 12, color: T.ink3, marginLeft: 2 }}>{it.u}</span></div>
+              </div>
+            ))}
+          </div>
+
+          {/* 今日挑战 */}
+          <div style={{ margin: '12px 22px 0', padding: '14px 16px', background: T.surface, borderRadius: 16, border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: T.goldSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.gold, flexShrink: 0 }}>{I.trophy(24)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>今日挑战 · 专注 {challengeGoal} 个番茄</span>
+                {doneCount >= challengeGoal && <span style={{ fontSize: 13, color: T.gold, fontWeight: 700 }}>✓</span>}
+              </div>
+              <div style={{ fontSize: 11, color: doneCount >= challengeGoal ? T.gold : T.ink3, marginTop: 3 }}>
+                {doneCount >= challengeGoal ? '挑战完成！+50 经验已到账' : `已完成 ${doneCount} / ${challengeGoal}，达成奖励 +50 经验`}
+              </div>
+              <div style={{ height: 6, borderRadius: 99, background: T.surface2, overflow: 'hidden', marginTop: 8 }}>
+                <div style={{ width: `${Math.min(100, Math.round(doneCount / challengeGoal * 100))}%`, height: '100%', background: doneCount >= challengeGoal ? T.gold : T.leaf, borderRadius: 99, transition: 'width 0.4s' }} />
+              </div>
+            </div>
+            <div onClick={onEditGoal} style={{ flexShrink: 0, padding: '6px 10px', borderRadius: 10, background: T.surface2, border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', transition: 'transform 0.15s' }} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.95)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}>
+              <span style={{ fontSize: 11, color: T.ink2, fontWeight: 600 }}>调整</span>
+              {I.chevronR(12, T.ink3)}
+            </div>
+          </div>
+
+          {/* AI 助手建议 */}
+          <div onClick={onOpenAi} style={{ margin: '12px 22px 0', padding: '13px 16px', background: T.leafSoft, borderRadius: 16, display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', transition: 'transform 0.15s' }} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.985)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}>
+            <div style={{ width: 24, height: 24, borderRadius: 8, background: T.leaf, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span className="serif" style={{ color: '#fff', fontSize: 13 }}>AI</span>
+            </div>
+            <div style={{ flex: 1, fontSize: 12.5, lineHeight: 1.6, color: T.ink }}>
+              你下午 <b style={{ color: T.leafDeep }}>14:00–16:00</b> 专注效率最高，建议把「写周报」排在这个时段，预计 2 个番茄完成。
+            </div>
+            {I.chevronR(16, T.ink3)}
+          </div>
+
+          {/* 待办列表 */}
+          <div style={{ padding: '18px 22px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="serif" style={{ fontSize: 17 }}>今日待办</div>
+            <div onClick={onAdd} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, color: T.leafDeep, fontSize: 13, fontWeight: 600 }}>
+              {I.plus(16)} 添加
+            </div>
+          </div>
+          <div ref={listRef} style={{ flex: 1, overflow: 'auto', padding: '0 22px 8px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {tasks.map((t, i) => {
+              const isDragging = dragIndex === i;
+              const offset = getOffset(i);
+              return (
+                <div key={t.id} onPointerDown={(e) => handlePointerDown(e, i)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
+                    background: t.done ? T.surface2 : T.surface, borderRadius: 16, border: `1px solid ${T.line}`,
+                    opacity: t.done ? 0.6 : 1,
+                    transform: `translateY(${offset}px)`,
+                    transition: isDragging ? 'none' : 'transform 0.18s ease, box-shadow 0.2s ease',
+                    boxShadow: isDragging ? '0 14px 30px rgba(44,58,40,0.18)' : 'none',
+                    position: 'relative', zIndex: isDragging ? 5 : 1,
+                    touchAction: 'none', cursor: t.done ? 'default' : 'grab', userSelect: 'none',
+                  }}>
+                  <div onClick={() => onToggleDone(t.id)} style={{ cursor: 'pointer', width: 24, height: 24, borderRadius: 8, border: `1.5px solid ${t.done ? T.leaf : T.ink3}`, background: t.done ? T.leaf : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fff' }}>
+                    {t.done && <span style={{ display: 'flex', animation: 'growIn 0.2s ease' }}>{I.check(15)}</span>}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14.5, fontWeight: 500, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</div>
+                    <div style={{ fontSize: 11.5, color: T.ink3, marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {I.tomato(12)} <span>{t.pomos} 个番茄 · {t.pomos * 25} 分钟</span>
+                    </div>
+                  </div>
+                  {!t.done && (
+                    <div onClick={() => onStart(t)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 99, background: T.leaf, color: '#fff', fontSize: 12.5, fontWeight: 600, flexShrink: 0 }}>
+                      {I.play(13)} 开始
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       专注倒计时（全屏锁定）
+    ============================================================ */
+    const BG_THEMES = [
+      { id: 'sky', name: '天空', css: 'linear-gradient(160deg, #3E7BB5 0%, #86BCE4 100%)' },
+      { id: 'mist', name: '晨雾', css: 'linear-gradient(160deg, #A9C79E 0%, #DCEBD2 100%)' },
+      { id: 'dusk', name: '夕阳', css: 'linear-gradient(160deg, #E8A98D 0%, #C9604F 100%)' },
+    ];
+    const MUSICS = [
+      { id: 'forest', name: '森林', icon: I.leaf },
+      { id: 'rain', name: '雨声', icon: I.rain },
+      { id: 'wave', name: '海浪', icon: I.wave },
+      { id: 'mute', name: '静音', icon: I.mute },
+    ];
+    const DURATIONS = [25, 15, 5, 1];
+
+    function ScreenFocus({ task, onQuit, onComplete }) {
+      const [total, setTotal] = useState(25 * 60);
+      const [remaining, setRemaining] = useState(25 * 60);
+      const [bg, setBg] = useState(BG_THEMES[0]);
+      const [music, setMusic] = useState(MUSICS[0]);
+      const [showQuit, setShowQuit] = useState(false);
+      const completed = useRef(false);
+
+      // 倒计时
+      useEffect(() => {
+        const t = setInterval(() => setRemaining(r => r > 0 ? r - 1 : 0), 1000);
+        return () => clearInterval(t);
+      }, []);
+      useEffect(() => {
+        if (remaining === 0 && !completed.current) {
+          completed.current = true;
+          onComplete();
+        }
+      }, [remaining]);
+
+      const setDur = (m) => { setTotal(m * 60); setRemaining(m * 60); completed.current = false; };
+      const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+      const ss = String(remaining % 60).padStart(2, '0');
+      const progress = 1 - remaining / total;
+      const R = 92, CIRC = 2 * Math.PI * R;
+      const isDark = bg.id === 'sky' || bg.id === 'dusk';
+
+      return (
+        <div style={{ height: '100%', position: 'relative', background: bg.css, transition: 'background 0.6s', color: isDark ? '#fff' : '#3a3328' }}>
+          {/* 顶部任务 */}
+          <div style={{ padding: '26px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 11, background: 'rgba(255,255,255,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{I.tomato(18)}</div>
+              <div>
+                <div style={{ fontSize: 12, opacity: 0.7 }}>正在专注</div>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{task.title}</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>第 2 个番茄</div>
+          </div>
+
+          {/* 倒计时圆环 */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 30 }}>
+            <div style={{ position: 'relative', width: 220, height: 220 }}>
+              <svg width="220" height="220" viewBox="0 0 220 220">
+                <circle cx="110" cy="110" r={R} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="11" />
+                <circle cx="110" cy="110" r={R} fill="none" stroke="#fff" strokeWidth="11" strokeLinecap="round"
+                  strokeDasharray={CIRC} strokeDashoffset={CIRC * progress} transform="rotate(-90 110 110)" style={{ transition: 'stroke-dashoffset 1s linear' }} />
+              </svg>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="serif" style={{ fontSize: 52, letterSpacing: '0.03em', lineHeight: 1 }}>{mm}:{ss}</div>
+                <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>专注进行中</div>
+              </div>
+            </div>
+
+            {/* 时长切换 */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 22 }}>
+              {DURATIONS.map(d => {
+                const active = total === d * 60;
+                return (
+                  <div key={d} onClick={() => setDur(d)} style={{ cursor: 'pointer', padding: '5px 14px', borderRadius: 99, fontSize: 12.5, background: active ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.22)', color: active ? (isDark ? T.leafDeep : T.tomato) : 'inherit', fontWeight: active ? 700 : 500 }}>{d} 分</div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ position: 'absolute', left: 24, right: 24, bottom: 30 }}>
+            {/* 背景切换 */}
+            <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 10 }}>专注背景</div>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
+              {BG_THEMES.map(b => (
+                <div key={b.id} onClick={() => setBg(b)} style={{ flex: 1, cursor: 'pointer' }}>
+                  <div style={{ height: 44, borderRadius: 12, background: b.css, border: bg.id === b.id ? '2.5px solid #fff' : '2px solid transparent', boxShadow: bg.id === b.id ? '0 0 0 3px rgba(255,255,255,0.25)' : 'none', transition: 'all 0.2s' }} />
+                  <div style={{ textAlign: 'center', fontSize: 11, marginTop: 5, opacity: 0.8 }}>{b.name}</div>
+                </div>
+              ))}
+            </div>
+            {/* 音乐切换 */}
+            <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 10 }}>白噪音</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 22 }}>
+              {MUSICS.map(m => {
+                const active = music.id === m.id;
+                return (
+                  <div key={m.id} onClick={() => setMusic(m)} style={{ flex: 1, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 0', borderRadius: 12, background: active ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.12)', border: active ? '1px solid rgba(255,255,255,0.6)' : '1px solid transparent' }}>
+                    {m.icon(18)}
+                    <span style={{ fontSize: 11 }}>{m.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+            {/* 操作 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
+              <span onClick={() => setShowQuit(true)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, opacity: 0.75 }}>{I.logout(16)} 提前退出</span>
+              <span onClick={() => { if (!completed.current) { completed.current = true; onComplete(); } }} style={{ cursor: 'pointer', fontSize: 11, opacity: 0.5 }}>演示：快进到完成</span>
+            </div>
+          </div>
+
+          {showQuit && (
+            <Modal onClose={() => setShowQuit(false)} width={286}>
+              <div style={{ textAlign: 'center' }}>
+                <div className="serif" style={{ fontSize: 17, marginBottom: 8 }}>要放弃这次专注吗？</div>
+                <div style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6 }}>本次已专注 {Math.floor((total - remaining) / 60)} 分钟，提前退出将不计入完整番茄。</div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+                  <div onClick={() => setShowQuit(false)} style={{ flex: 1, padding: '12px', borderRadius: 13, border: `1px solid ${T.line}`, color: T.ink2, fontSize: 14, cursor: 'pointer', textAlign: 'center' }}>继续专注</div>
+                  <div onClick={onQuit} style={{ flex: 1, padding: '12px', borderRadius: 13, background: T.tomato, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center' }}>退出</div>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    /* ============================================================
+       统计
+    ============================================================ */
+    function ScreenStats() {
+      const [range, setRange] = useState('day');
+      const timeline = [
+        { time: '08:30', end: '08:55', title: '晨间阅读', mins: 25, pct: 30 },
+        { time: '10:00', end: '10:50', title: '写周报', mins: 50, pct: 44 },
+        { time: '14:30', end: '14:55', title: '背英语单词', mins: 25, pct: 62 },
+        { time: '16:00', end: '16:25', title: '读《认知觉醒》第三章', mins: 25, pct: 70 },
+      ];
+      return (
+        <div style={{ height: '100%', background: T.bg, overflow: 'auto', padding: '22px 22px 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div className="serif" style={{ fontSize: 24 }}>统计</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <Pill active={range==='day'} onClick={()=>setRange('day')}>日</Pill>
+              <Pill active={range==='week'} onClick={()=>setRange('week')}>周</Pill>
+              <Pill active={range==='month'} onClick={()=>setRange('month')}>月</Pill>
+            </div>
+          </div>
+
+          {/* 数据卡 */}
+          <div style={{ padding: '18px 20px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+            {[
+              { k: '专注时长', v: '2 小时', u: '05 分', c: T.leafDeep, icon: I.clock },
+              { k: '完成番茄', v: 5, u: '个', c: T.tomato, icon: I.tomato },
+              { k: '任务完成率', v: '80', u: '%', c: T.gold, icon: I.star },
+            ].map((it, i) => (
+              <div key={i} style={{ flex: 1, textAlign: 'center', borderRight: i < 2 ? `1px solid ${T.line}` : 'none' }}>
+                <div style={{ color: it.c, display: 'flex', justifyContent: 'center', marginBottom: 6 }}>{it.icon(16)}</div>
+                <div className="serif" style={{ fontSize: 20, lineHeight: 1 }}>{it.v}<span style={{ fontSize: 11, color: T.ink3, marginLeft: 2 }}>{it.u}</span></div>
+                <div style={{ fontSize: 11, color: T.ink2, marginTop: 5 }}>{it.k}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* AI 自动分析 */}
+          <div style={{ padding: '16px 18px', background: T.leafSoft, borderRadius: 18, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <div style={{ width: 22, height: 22, borderRadius: 7, background: T.leaf, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span className="serif" style={{ color: '#fff', fontSize: 12 }}>AI</span></div>
+              <span className="serif" style={{ fontSize: 14.5 }}>本周专注洞察</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12.5, lineHeight: 1.6, color: T.ink }}>
+              <div>· 专注总时长较上周 <b style={{ color: T.leafDeep }}>提升 18%</b>，坚持得很好。</div>
+              <div>· 你的「深度专注」高峰在 <b style={{ color: T.tomato }}>14:00–16:00</b>，建议保留。</div>
+              <div>· 早晨 08:30 的专注被打断率最低，适合安排阅读类任务。</div>
+            </div>
+          </div>
+
+          {/* 时间轴 */}
+          <div className="serif" style={{ fontSize: 16, marginBottom: 14 }}>今日完成时间轴</div>
+          <div style={{ position: 'relative', paddingLeft: 18, marginBottom: 20 }}>
+            {/* 竖线 */}
+            <div style={{ position: 'absolute', left: 6, top: 8, bottom: 8, width: 2, background: T.leafSoft }} />
+            {timeline.map((t, i) => (
+              <div key={i} style={{ position: 'relative', paddingLeft: 20, paddingBottom: 16 }}>
+                <div style={{ position: 'absolute', left: 0, top: 5, width: 14, height: 14, borderRadius: '50%', background: '#fff', border: `3px solid ${T.tomato}` }} />
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>{t.title}</div>
+                  <div style={{ fontSize: 11, color: T.ink3 }}>{t.time} – {t.end}</div>
+                </div>
+                <div style={{ fontSize: 11, color: T.ink2, marginTop: 3 }}>专注 {t.mins} 分钟 · 完成</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       排行
+    ============================================================ */
+    function ScreenRank() {
+      const medalColors = ['#D9A441', '#9AA6B2', '#C08A5E'];
+      const friends = [
+        { name: '苏叶', min: 480, xp: 3200, me: false },
+        { name: '林小满', min: 375, xp: 2450, me: true },
+        { name: '陈屿', min: 340, xp: 2100, me: false },
+        { name: '周青', min: 260, xp: 1680, me: false },
+        { name: '阿楠', min: 180, xp: 1120, me: false },
+        { name: '小雨', min: 95, xp: 620, me: false },
+      ].sort((a,b) => b.min - a.min);
+      const avatars = ['#6E9B57', '#E07A5F', '#D9A441', '#7FA1B0', '#B08BC0', '#C09B6E'];
+      const rankOrder = friends.map((f, i) => ({ ...f, rank: i + 1 }));
+      const me = rankOrder.find(f => f.me);
+      return (
+        <div style={{ height: '100%', background: T.bg, overflow: 'auto', padding: '22px 22px 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+            <div className="serif" style={{ fontSize: 24 }}>好友排行</div>
+            <Pill active onClick={()=>{}}>本周</Pill>
+          </div>
+
+          {/* 我的排名卡 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', background: T.leafDeep, borderRadius: 18, color: '#fff', marginBottom: 16, boxShadow: '0 12px 28px rgba(76,122,62,0.3)' }}>
+            <div className="serif" style={{ fontSize: 30, width: 40, textAlign: 'center', opacity: 0.9 }}>{me.rank}</div>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 600 }}>{me.name[0]}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{me.name} <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 6 }}>我</span></div>
+              <div style={{ fontSize: 11.5, opacity: 0.8, marginTop: 2 }}>再专注 105 分钟可超越第 1 名</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div className="serif" style={{ fontSize: 18 }}>{me.min}<span style={{ fontSize: 11, opacity: 0.7 }}> 分钟</span></div>
+              <div style={{ fontSize: 11, opacity: 0.8 }}>{I.star(12)} {me.xp} 经验</div>
+            </div>
+          </div>
+
+          {/* 排行列表 */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {rankOrder.map((f, i) => {
+              const c = avatars[i % avatars.length];
+              return (
+                <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 16px', background: f.me ? T.surface2 : T.surface, borderRadius: 16, border: `1px solid ${f.me ? T.leaf : T.line}` }}>
+                  <div className="serif" style={{ width: 26, height: 26, borderRadius: '50%', background: f.rank <= 3 ? medalColors[f.rank - 1] : 'transparent', color: f.rank <= 3 ? '#fff' : T.ink3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
+                    {f.rank}
+                  </div>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: c, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 600, color: '#fff' }}>{f.name[0]}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{f.name}{f.me && <span style={{ fontSize: 10, color: T.leafDeep, marginLeft: 6 }}>我</span>}</div>
+                    <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>{I.star(11)} {f.xp} 经验</div>
+                  </div>
+                  <div className="serif" style={{ fontSize: 16 }}>{f.min}<span style={{ fontSize: 10, color: T.ink3 }}> 分钟</span></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       我的
+    ============================================================ */
+    function ScreenMe({ loggedIn, onLogin, signed, onSign, exp, level, trees, withered, streakDays, onRevive, onLogout, theme, onSetTheme, onOpenWidget }) {
+      if (!loggedIn) {
+        return (
+          <div style={{ height: '100%', background: T.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 30px', textAlign: 'center' }}>
+            <LeafLogo size={72} />
+            <div className="serif" style={{ fontSize: 26, marginTop: 12 }}>青番</div>
+            <div className="serif" style={{ fontSize: 14, color: T.ink2, marginTop: 8 }}>把专注，种成一片森林</div>
+            <div style={{ width: '100%', marginTop: 24, padding: 16, background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, textAlign: 'left' }}>
+              {[['✅', '今日待办 + 专注计时', '无需登录，直接使用'], ['🔒', 'AI 智能助手', '登录后解锁'], ['🔒', '统计 / 自习室', '登录后解锁']].map(([ic, t, d], i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0' }}>
+                  <span style={{ fontSize: 16 }}>{ic}</span>
+                  <div><div style={{ fontSize: 13.5, fontWeight: 500 }}>{t}</div><div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>{d}</div></div>
+                </div>
+              ))}
+            </div>
+            <div onClick={onLogin} style={{ width: '100%', marginTop: 20, padding: '15px', background: T.leaf, color: '#fff', borderRadius: 14, fontSize: 15, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.1em', boxShadow: `0 10px 24px rgba(110,155,87,0.32)` }}>登录 / 注册</div>
+            <div style={{ fontSize: 11, color: T.ink3, marginTop: 10 }}>登录后可同步专注数据、解锁全部功能</div>
+          </div>
+        );
+      }
+      const expMax = 3000;
+      const expPct = Math.round(exp / expMax * 100);
+      const [name, setName] = useState('林小满');
+      const [signature, setSignature] = useState('把专注，种成一片森林');
+      const [editing, setEditing] = useState(false);
+      const [nameDraft, setNameDraft] = useState(name);
+      const [sigDraft, setSigDraft] = useState(signature);
+      const [settings, setSettings] = useState(null); // 'account' | 'notify' | 'privacy' | 'about'
+      const [notify, setNotify] = useState({ focus: true, sign: true, friend: false });
+      const [privacy, setPrivacy] = useState({ publicTime: true, showOnline: false });
+      const [badgeDetail, setBadgeDetail] = useState(null);
+      const [confirmLogout, setConfirmLogout] = useState(false);
+      const badges = [
+        { icon: I.flame, name: '连续 7 天', got: true, desc: '连续签到 7 天解锁' },
+        { icon: I.leaf, name: '森林新芽', got: true, desc: '种下第 1 棵树解锁' },
+        { icon: I.star, name: '专注达人', got: true, desc: '累计专注 100 小时解锁' },
+        { icon: I.trophy, name: '月度冠军', got: false, desc: '当月排行第 1 名解锁' },
+      ];
+      const settingsItems = [
+        { key: 'account', icon: I.user, label: '账号与安全', desc: '手机号 138****6688' },
+        { key: 'notify', icon: I.bird, label: '消息提醒', desc: '专注、签到提醒' },
+        { key: 'privacy', icon: I.mute, label: '隐私设置', desc: '公开时长、在线状态' },
+        { key: 'about', icon: I.leaf, label: '关于青番', desc: 'v1.0.0 · AI 番茄钟' },
+      ];
+      const settingsMeta = {
+        account: { title: '账号与安全' },
+        notify: { title: '消息提醒' },
+        privacy: { title: '隐私设置' },
+        about: { title: '关于青番' },
+      };
+      const themeOptions = [
+        { key: 'green', label: '青番绿', icon: I.leaf, c1: '#6E9B57', c2: '#F3F6EE' },
+        { key: 'dark', label: '深夜墨', icon: I.moon, c1: '#2B342B', c2: '#171C17' },
+        { key: 'dawn', label: '晨光暖', icon: I.sun, c1: '#C08A4E', c2: '#FBF3E9' },
+        { key: 'ocean', label: '静谧蓝', icon: I.palette, c1: '#5C8BA6', c2: '#EEF3F6' },
+      ];
+      const saveProfile = () => { setName(nameDraft.trim() || name); setSignature(sigDraft.trim() || signature); setEditing(false); };
+      return (
+        <div style={{ height: '100%', background: T.bg, overflow: 'auto', padding: '22px 22px 88px' }}>
+          {/* 个人信息（点击编辑资料） */}
+          <div onClick={() => { setNameDraft(name); setSigDraft(signature); setEditing(true); }} style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, cursor: 'pointer' }}>
+            <div style={{ width: 58, height: 58, borderRadius: '50%', background: `linear-gradient(135deg, ${T.leaf}, ${T.leafDeep})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 600, position: 'relative' }}>
+              {name[0]}
+              <div style={{ position: 'absolute', right: -2, bottom: -2, background: T.gold, color: '#fff', borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '2px 6px', border: '2px solid #fff' }}>Lv.{level}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 18, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>{name}<span style={{ color: T.ink3 }}>{I.chevronR(14)}</span></div>
+              <div style={{ fontSize: 12, color: T.ink2, marginTop: 3 }}>{signature}</div>
+            </div>
+          </div>
+
+          {/* 经验值 */}
+          <div style={{ padding: '16px 18px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+              <span style={{ fontSize: 13, color: T.ink2 }}>经验值</span>
+              <span className="serif" style={{ fontSize: 15 }}>{exp}<span style={{ fontSize: 11, color: T.ink3 }}> / {expMax}</span></span>
+            </div>
+            <div style={{ height: 8, borderRadius: 99, background: T.surface2, overflow: 'hidden' }}>
+              <div style={{ width: `${expPct}%`, height: '100%', background: `linear-gradient(90deg, ${T.leaf}, ${T.gold})`, borderRadius: 99, transition: 'width 0.5s' }} />
+            </div>
+            <div style={{ fontSize: 11, color: T.ink3, marginTop: 8 }}>再获得 {expMax - exp} 经验升级到 Lv.{level + 1}</div>
+          </div>
+
+          {/* 签到 */}
+          <div onClick={onSign} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', background: signed ? T.surface : T.tomatoSoft, borderRadius: 18, border: `1px solid ${signed ? T.line : '#F0C9B8'}`, marginBottom: 16 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: signed ? T.surface2 : T.tomato, display: 'flex', alignItems: 'center', justifyContent: 'center', color: signed ? T.ink3 : '#fff' }}>{I.gift(20)}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{signed ? '今日已签到' : '每日签到'}</div>
+              <div style={{ fontSize: 12, color: signed ? T.ink3 : T.tomato, marginTop: 2 }}>{signed ? '已连续签到 12 天，明天 +15' : '签到 +10 经验，连续签到奖励递增'}</div>
+            </div>
+            <span style={{ fontSize: 13, color: signed ? T.ink3 : T.tomato, fontWeight: 700 }}>{signed ? '✓' : '签到'}</span>
+          </div>
+
+          {/* 我的森林 */}
+          <div style={{ padding: '16px 18px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, marginBottom: 16 }}>
+            {(() => {
+              const forestLevel = trees < 5 ? { name: '小树苗', bg: '#E8F0E3', color: '#6E9B57', next: 5 }
+                : trees < 15 ? { name: '青葱密林', bg: '#F4E8CE', color: '#D9A441', next: 15 }
+                : trees < 30 ? { name: '古老森林', bg: '#DCE8CF', color: '#2C3A28', next: 30 }
+                : { name: '梦幻森林', bg: '#EDE3F0', color: '#8B6E9B', next: null };
+              const nextName = trees < 5 ? '青葱密林' : trees < 15 ? '古老森林' : '梦幻森林';
+              return (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span className="serif" style={{ fontSize: 16 }}>我的森林</span>
+                      <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, background: forestLevel.bg, color: forestLevel.color, fontWeight: 600 }}>{forestLevel.name}</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: T.ink3 }}>已种 {trees} 棵 · 枯萎 {withered} 棵</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                    {Array.from({ length: trees }).map((_, i) => (
+                      <div key={'t' + i} style={{ width: 50, height: 50, borderRadius: 14, background: T.leafSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.leafDeep }}>{I.tree(26)}</div>
+                    ))}
+                    {Array.from({ length: withered }).map((_, i) => (
+                      <div key={'w' + i} onClick={onRevive} style={{ cursor: 'pointer', width: 50, height: 50, borderRadius: 14, background: T.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.ink3, opacity: 0.75, position: 'relative' }}>
+                        {I.tree(26)}
+                        <div style={{ position: 'absolute', bottom: 3, right: 4, fontSize: 9, color: T.tomato, fontWeight: 700 }}>50</div>
+                      </div>
+                    ))}
+                    {Array.from({ length: Math.max(0, 8 - trees - withered) }).map((_, i) => (
+                      <div key={'e' + i} style={{ width: 50, height: 50, borderRadius: 14, border: `1.5px dashed ${T.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.ink3, fontSize: 18 }}>+</div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.ink3, marginTop: 10 }}>
+                    {forestLevel.next ? `再种 ${forestLevel.next - trees} 棵升级到「${nextName}」` : '你的森林已达最高等级，继续种下去吧！'}
+                    {withered > 0 ? ' · 点击枯萎树消耗 50 经验复活' : ''}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          {/* 本周打卡 */}
+          <div style={{ padding: '16px 18px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+              <span className="serif" style={{ fontSize: 16 }}>本周打卡</span>
+              <span style={{ fontSize: 11, color: T.tomato }}>连续 {streakDays} 天 · 明天 +15</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              {['一', '二', '三', '四', '五', '六', '日'].map((d, i) => {
+                const isToday = i === 2;
+                const done = i < 2 || (isToday && signed);
+                return (
+                  <div key={d} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <div style={{
+                      width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600,
+                      background: done ? T.leaf : (isToday ? T.tomatoSoft : 'transparent'),
+                      color: done ? '#fff' : (isToday ? T.tomato : T.ink3),
+                      border: done ? 'none' : (isToday ? `1.5px solid ${T.tomato}` : `1px dashed ${T.line}`),
+                    }}>
+                      {done ? I.check(15) : (isToday ? '今' : d)}
+                    </div>
+                    <span style={{ fontSize: 10, color: T.ink3 }}>{d}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 徽章 */}
+          <div className="serif" style={{ fontSize: 16, marginBottom: 12 }}>我的徽章</div>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+            {badges.map((b, i) => (
+              <div key={i} onClick={() => setBadgeDetail(b)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: '16px 0', background: T.surface, borderRadius: 16, border: `1px solid ${T.line}`, opacity: b.got ? 1 : 0.5, cursor: 'pointer', position: 'relative' }}>
+                <div style={{ color: b.got ? (b.icon === I.flame ? T.tomato : T.leafDeep) : T.ink3, position: 'relative' }}>
+                  {b.icon(24)}
+                  {!b.got && <span style={{ position: 'absolute', right: -7, bottom: -7, color: T.ink3 }}>{I.lock(12)}</span>}
+                </div>
+                <span style={{ fontSize: 11, color: T.ink2 }}>{b.name}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 累计数据 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 18px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, marginBottom: 16 }}>
+            {[
+              { k: '累计专注', v: '126', u: '小时' },
+              { k: '累计番茄', v: 302, u: '个' },
+              { k: '坚持天数', v: 46, u: '天' },
+            ].map((it, i) => (
+              <div key={i} style={{ textAlign: 'center', flex: 1, borderRight: i < 2 ? `1px solid ${T.line}` : 'none' }}>
+                <div className="serif" style={{ fontSize: 19 }}>{it.v}<span style={{ fontSize: 11, color: T.ink3, marginLeft: 2 }}>{it.u}</span></div>
+                <div style={{ fontSize: 11, color: T.ink2, marginTop: 3 }}>{it.k}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 外观主题 */}
+          <div style={{ padding: '16px 18px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+              <span className="serif" style={{ fontSize: 16 }}>外观主题</span>
+              <span style={{ fontSize: 11, color: T.ink3 }}>{themeOptions.find(t => t.key === theme)?.label}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              {themeOptions.map(t => {
+                const active = theme === t.key;
+                return (
+                  <div key={t.key} onClick={() => onSetTheme(t.key)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, cursor: 'pointer', flex: 1 }}>
+                    <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', border: active ? `2.5px solid ${T.leaf}` : `1.5px solid ${T.line}`, position: 'relative', boxShadow: active ? '0 6px 16px rgba(0,0,0,0.12)' : 'none', transition: 'all 0.2s' }}>
+                      <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${t.c1} 0%, ${t.c1} 50%, ${t.c2} 50%, ${t.c2} 100%)` }} />
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{t.icon(20)}</div>
+                      {active && <div style={{ position: 'absolute', right: 3, bottom: 3, width: 16, height: 16, borderRadius: '50%', background: T.leaf, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{I.check(10)}</div>}
+                    </div>
+                    <span style={{ fontSize: 11, color: active ? T.ink : T.ink2, fontWeight: active ? 600 : 400 }}>{t.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 桌面小组件 */}
+          <div onClick={onOpenWidget} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, marginBottom: 16, cursor: 'pointer' }}>
+            <div style={{ width: 46, height: 46, borderRadius: 13, background: T.leafSoft, color: T.leafDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{I.grid(22)}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 600 }}>桌面小组件</div>
+              <div style={{ fontSize: 11.5, color: T.ink3, marginTop: 2 }}>把今日专注进度放到手机桌面</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 34, height: 22, borderRadius: 6, background: T.surface2, border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.tomato }}>{I.tomato(12)}</div>
+              <span style={{ color: T.ink3 }}>{I.chevronR(16)}</span>
+            </div>
+          </div>
+
+          {/* 设置入口 */}
+          <div style={{ padding: '6px 18px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, marginBottom: 16 }}>
+            {settingsItems.map((s, i) => (
+              <div key={s.key} onClick={() => setSettings(s.key)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', borderBottom: i < settingsItems.length - 1 ? `1px solid ${T.line}` : 'none', cursor: 'pointer' }}>
+                <div style={{ width: 36, height: 36, borderRadius: 11, background: T.surface2, color: T.leafDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{s.icon(19)}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>{s.label}</div>
+                  <div style={{ fontSize: 11, color: T.ink3, marginTop: 1 }}>{s.desc}</div>
+                </div>
+                <span style={{ color: T.ink3 }}>{I.chevronR(16)}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 退出登录 */}
+          <div onClick={() => setConfirmLogout(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '15px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, color: T.tomato, fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 20 }}>
+            {I.logout(18)} 退出登录
+          </div>
+
+          {/* 编辑资料弹窗 */}
+          {editing && (
+            <Modal onClose={() => setEditing(false)} width={290}>
+              <div className="serif" style={{ fontSize: 17, marginBottom: 14 }}>编辑资料</div>
+              <div style={{ fontSize: 12, color: T.ink3, marginBottom: 5 }}>昵称</div>
+              <input value={nameDraft} onChange={e => setNameDraft(e.target.value)} placeholder="你的昵称" style={{ width: '100%', padding: '11px 13px', borderRadius: 11, border: `1px solid ${T.line}`, fontSize: 14, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box' }} />
+              <div style={{ fontSize: 12, color: T.ink3, margin: '12px 0 5px' }}>个性签名</div>
+              <input value={sigDraft} onChange={e => setSigDraft(e.target.value)} placeholder="写一句鼓励自己的话" style={{ width: '100%', padding: '11px 13px', borderRadius: 11, border: `1px solid ${T.line}`, fontSize: 14, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                <div onClick={() => setEditing(false)} style={{ flex: 1, padding: '11px', borderRadius: 12, border: `1px solid ${T.line}`, color: T.ink2, fontSize: 14, cursor: 'pointer', textAlign: 'center' }}>取消</div>
+                <div onClick={saveProfile} style={{ flex: 1, padding: '11px', borderRadius: 12, background: T.leaf, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>保存</div>
+              </div>
+            </Modal>
+          )}
+
+          {/* 设置项弹窗 */}
+          {settings && (
+            <Modal onClose={() => setSettings(null)} width={300}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div className="serif" style={{ fontSize: 17 }}>{settingsMeta[settings].title}</div>
+                <div onClick={() => setSettings(null)} aria-label="关闭设置" style={{ cursor: 'pointer', color: T.ink3, padding: 4 }}>{I.x(18)}</div>
+              </div>
+              {settings === 'account' && (
+                <div>
+                  {[['绑定手机', '138****6688'], ['绑定微信', '已绑定'], ['登录密码', '••••••••']].map(([k, v]) => (
+                    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 0', borderBottom: `1px solid ${T.line}`, fontSize: 13.5 }}>
+                      <span style={{ color: T.ink2 }}>{k}</span>
+                      <span style={{ color: T.ink, fontWeight: 500 }}>{v}</span>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 11, color: T.ink3, marginTop: 12, display: 'flex', alignItems: 'center', gap: 5 }}>{I.check(12)} 账号已通过实名校验，安全等级：高</div>
+                </div>
+              )}
+              {settings === 'notify' && (
+                <div>
+                  {[
+                    { k: '专注完成提醒', key: 'focus' },
+                    { k: '每日签到提醒', key: 'sign' },
+                    { k: '好友动态提醒', key: 'friend' },
+                  ].map((it) => (
+                    <div key={it.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 0', borderBottom: `1px solid ${T.line}`, fontSize: 13.5 }}>
+                      <span>{it.k}</span>
+                      <Switch on={notify[it.key]} onToggle={() => setNotify(n => ({ ...n, [it.key]: !n[it.key] }))} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {settings === 'privacy' && (
+                <div>
+                  {[
+                    { k: '公开我的专注时长', desc: '好友可见你的专注记录', key: 'publicTime' },
+                    { k: '展示在线状态', desc: '自习室中显示我在线', key: 'showOnline' },
+                  ].map((it) => (
+                    <div key={it.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 0', borderBottom: `1px solid ${T.line}` }}>
+                      <div>
+                        <div style={{ fontSize: 13.5 }}>{it.k}</div>
+                        <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>{it.desc}</div>
+                      </div>
+                      <Switch on={privacy[it.key]} onToggle={() => setPrivacy(p => ({ ...p, [it.key]: !p[it.key] }))} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {settings === 'about' && (
+                <div style={{ textAlign: 'center', paddingTop: 4 }}>
+                  <LeafLogo size={64} />
+                  <div className="serif" style={{ fontSize: 20, marginTop: 10 }}>青番</div>
+                  <div style={{ fontSize: 12, color: T.ink3, marginTop: 4 }}>v1.0.0 · AI 番茄钟智能助手</div>
+                  <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.7, marginTop: 14 }}>把专注，种成一片森林。<br />一款会陪你成长的专注工具。</div>
+                  <div style={{ fontSize: 11, color: T.ink3, marginTop: 14 }}>© 2026 青番团队</div>
+                </div>
+              )}
+            </Modal>
+          )}
+
+          {/* 徽章详情弹窗 */}
+          {badgeDetail && (
+            <Modal onClose={() => setBadgeDetail(null)} width={280}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ width: 56, height: 56, borderRadius: 18, background: badgeDetail.got ? T.goldSoft : T.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', color: badgeDetail.got ? (badgeDetail.icon === I.flame ? T.tomato : T.gold) : T.ink3, margin: '0 auto' }}>{badgeDetail.icon(30)}</div>
+                <div className="serif" style={{ fontSize: 18, marginTop: 12 }}>{badgeDetail.name}</div>
+                <div style={{ fontSize: 12, color: badgeDetail.got ? T.ink2 : T.ink3, marginTop: 6, lineHeight: 1.6 }}>{badgeDetail.desc}</div>
+                <div style={{ marginTop: 16, padding: '10px', borderRadius: 12, background: badgeDetail.got ? T.leafSoft : T.surface2, color: badgeDetail.got ? T.leafDeep : T.ink3, fontSize: 12.5, fontWeight: 600 }}>{badgeDetail.got ? '已获得' : '未解锁'}</div>
+                <div onClick={() => setBadgeDetail(null)} style={{ marginTop: 16, padding: '11px', borderRadius: 12, background: T.leaf, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>知道了</div>
+              </div>
+            </Modal>
+          )}
+
+          {/* 退出登录确认弹窗 */}
+          {confirmLogout && (
+            <Modal onClose={() => setConfirmLogout(false)} width={280}>
+              <div style={{ textAlign: 'center' }}>
+                <div className="serif" style={{ fontSize: 17, marginBottom: 6 }}>退出登录？</div>
+                <div style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6 }}>退出后本机专注数据会保留，<br />下次登录即可恢复。</div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+                  <div onClick={() => setConfirmLogout(false)} style={{ flex: 1, padding: '11px', borderRadius: 12, border: `1px solid ${T.line}`, color: T.ink2, fontSize: 14, cursor: 'pointer', textAlign: 'center' }}>取消</div>
+                  <div onClick={onLogout} style={{ flex: 1, padding: '11px', borderRadius: 12, background: T.tomato, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>退出</div>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    /* ============================================================
+       自习室（FR-8）
+    ============================================================ */
+    function ScreenStudyRoom({ onStart, showToast }) {
+      const [rooms, setRooms] = useState([
+        { id: '7f3bb90e-b43c-4b55-b0b6-f7fc66f8f1c7', name: '森林自习室', role: 'owner', member_count: 4, need_password: false, created_at: Date.now() - 3600e3 },
+        { id: '311b7236-a264-4cd1-bfe1-a57ddff2fc55', name: '考研冲刺营', role: 'member', member_count: 23, need_password: true, created_at: Date.now() - 7200e3 },
+      ]);
+      const [showCreate, setShowCreate] = useState(false);
+      const [newName, setNewName] = useState('');
+      const [usePwd, setUsePwd] = useState(false);
+      const [newPwd, setNewPwd] = useState('');
+      const [showJoin, setShowJoin] = useState(false);
+      const [joinCode, setJoinCode] = useState('');
+      const [joinPwd, setJoinPwd] = useState('');
+      const [board, setBoard] = useState(null);
+      const [msgs, setMsgs] = useState([]);
+      const [msgInput, setMsgInput] = useState('');
+      const [replyTo, setReplyTo] = useState(null);
+      const [confirmRoom, setConfirmRoom] = useState(null);
+
+      const fmt = (ts) => { const d = new Date(ts); const p = n => (n < 10 ? '0' + n : n); return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+      const openBoard = (r) => {
+        setBoard({ id: r.id, name: r.name });
+        setReplyTo(null);
+        setMsgs([
+          { id: 1, nickname: '苏叶', content: '今晚一起冲 25 分钟！', created_at: Date.now() - 600e3, depth: 0, reply_to_name: null },
+          { id: 2, nickname: '林小满', content: '好呀，我先开始～', created_at: Date.now() - 300e3, depth: 1, reply_to_name: '苏叶' },
+        ]);
+      };
+      const sendMsg = () => {
+        const t = msgInput.trim();
+        if (!t) { showToast('请输入留言内容', null); return; }
+        setMsgs(m => [...m, { id: Date.now(), nickname: '我', content: t, created_at: Date.now(), depth: replyTo ? 1 : 0, reply_to_name: replyTo }]);
+        setMsgInput(''); setReplyTo(null);
+        showToast('已发送', I.check(15, T.leaf));
+      };
+      const createRoom = () => {
+        const name = newName.trim();
+        if (!name) { showToast('请输入自习室名称', null); return; }
+        const id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
+        setRooms(rs => [{ id, name, role: 'owner', member_count: 1, need_password: usePwd, created_at: Date.now() }, ...rs]);
+        setShowCreate(false); setNewName(''); setUsePwd(false); setNewPwd('');
+        showToast(`自习室「${name}」已创建`, I.check(15, T.leaf));
+      };
+      const joinRoom = () => {
+        const code = joinCode.trim();
+        if (!code) { showToast('请输入房间号', null); return; }
+        if (rooms.some(r => r.id === code)) { showToast('已在房间中', null); return; }
+        setRooms(rs => [{ id: code, name: '新加入的自习室', role: 'member', member_count: 2, need_password: !!joinPwd, created_at: Date.now() }, ...rs]);
+        setShowJoin(false); setJoinCode(''); setJoinPwd('');
+        showToast('已加入房间', I.check(15, T.leaf));
+      };
+      const confirmDo = () => {
+        if (!confirmRoom) return;
+        const act = confirmRoom.action;
+        setRooms(rs => rs.filter(r => r.id !== confirmRoom.room.id));
+        setConfirmRoom(null);
+        showToast(act === 'delete' ? '已解散自习室' : '已退出自习室', null);
+      };
+
+      return (
+        <div style={{ height: '100%', background: T.bg, overflow: 'auto', padding: '22px 22px 10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div>
+              <div className="serif" style={{ fontSize: 24 }}>自习室</div>
+              <div style={{ fontSize: 12, color: T.ink2, marginTop: 3 }}>和好友一起，专注不孤单</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Pill onClick={() => setShowJoin(true)}>{I.lock(13)} 加入</Pill>
+              <Pill active onClick={() => setShowCreate(true)}>{I.plus(13)} 创建</Pill>
+            </div>
+          </div>
+
+          <div className="serif" style={{ fontSize: 16, marginBottom: 12 }}>我的自习室</div>
+          {rooms.length === 0 ? (
+            <div style={{ padding: '50px 0', textAlign: 'center', color: T.ink3 }}>
+              <div style={{ fontSize: 44 }}>🏠</div>
+              <div style={{ fontSize: 14, color: T.ink2, marginTop: 12 }}>还没有自习室</div>
+              <div style={{ fontSize: 12, marginTop: 6 }}>点右上角「创建」新建，或「加入」输入房间号</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {rooms.map(r => (
+                <div key={r.id} style={{ padding: 14, background: T.surface, borderRadius: 16, border: `1px solid ${T.line}` }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 15, fontWeight: 600 }}>{r.name}</span>
+                        {r.role === 'owner' && <span style={{ fontSize: 10, color: T.gold, background: T.goldSoft, padding: '2px 6px', borderRadius: 99, fontWeight: 600 }}>房主</span>}
+                        {r.need_password && <span style={{ fontSize: 10, color: T.tomato, background: T.tomatoSoft, padding: '2px 6px', borderRadius: 99, fontWeight: 600 }}>有密码</span>}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>房间号 {r.id}</div>
+                      <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>{r.member_count} 人 · {fmt(r.created_at)}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <span onClick={() => openBoard(r)} style={{ cursor: 'pointer', fontSize: 16 }}>💬</span>
+                      <span onClick={() => setConfirmRoom({ room: r, action: r.role === 'owner' ? 'delete' : 'leave' })} style={{ cursor: 'pointer', fontSize: 13, color: T.ink3 }}>✕</span>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 10 }}>
+                    <div onClick={() => onStart({ title: `在「${r.name}」专注`, pomos: 1, difficulty: 'medium' })} style={{ display: 'inline-block', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: T.leafDeep, background: T.leafSoft, padding: '7px 14px', borderRadius: 99 }}>开始自习</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {board && (
+            <Modal onClose={() => setBoard(null)} width={320}>
+              <div className="serif" style={{ fontSize: 17 }}>房间留言</div>
+              <div style={{ fontSize: 11.5, color: T.ink3, marginTop: 2, marginBottom: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{board.name}</div>
+              {replyTo && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: T.leafSoft, borderRadius: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 11.5, color: T.leafDeep }}>回复 @{replyTo}</span>
+                  <span onClick={() => setReplyTo(null)} style={{ fontSize: 11.5, color: T.ink3, cursor: 'pointer' }}>取消</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendMsg(); }} placeholder="写一句留言…" style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${T.line}`, fontSize: 13, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box' }} />
+                <div onClick={sendMsg} style={{ padding: '10px 16px', borderRadius: 10, background: T.leaf, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>发送</div>
+              </div>
+              <div style={{ marginTop: 14, maxHeight: 300, overflow: 'auto' }}>
+                {msgs.length === 0 ? (
+                  <div style={{ fontSize: 12, color: T.ink3, textAlign: 'center', padding: '18px 0' }}>还没有留言，来说点什么吧</div>
+                ) : msgs.map(m => (
+                  <div key={m.id} style={{ display: 'flex', gap: 8, padding: '8px 0', paddingLeft: (m.depth || 0) * 16 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 14, background: T.leaf, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{(m.nickname || '匿')[0]}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 600 }}>{m.nickname}</span>
+                        <span style={{ fontSize: 10.5, color: T.ink3 }}>{fmt(m.created_at)}</span>
+                      </div>
+                      <div style={{ fontSize: 13, lineHeight: 1.5, marginTop: 3 }}>{m.reply_to_name ? `回复 @${m.reply_to_name}：` : ''}{m.content}</div>
+                      <div onClick={() => setReplyTo(m.nickname)} style={{ fontSize: 10.5, color: T.leafDeep, marginTop: 4, cursor: 'pointer' }}>回复</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Modal>
+          )}
+
+          {showCreate && (
+            <Modal onClose={() => setShowCreate(false)} width={300}>
+              <div className="serif" style={{ fontSize: 17, marginBottom: 6 }}>创建自习室</div>
+              <div style={{ fontSize: 11.5, color: T.ink3, marginBottom: 14 }}>起个名字，喊上好友一起学</div>
+              <input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') createRoom(); }} placeholder="自习室名称" autoFocus style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1px solid ${T.line}`, fontSize: 14, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
+                <span style={{ fontSize: 13 }}>设置密码</span>
+                <Switch on={usePwd} onToggle={() => setUsePwd(v => !v)} />
+              </div>
+              {usePwd && (
+                <input value={newPwd} onChange={e => setNewPwd(e.target.value)} type="password" placeholder="房间密码" style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1px solid ${T.line}`, fontSize: 14, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box', marginTop: 10 }} />
+              )}
+              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                <div onClick={() => setShowCreate(false)} style={{ flex: 1, padding: '11px', borderRadius: 12, border: `1px solid ${T.line}`, color: T.ink2, fontSize: 14, cursor: 'pointer', textAlign: 'center' }}>取消</div>
+                <div onClick={createRoom} style={{ flex: 1, padding: '11px', borderRadius: 12, background: T.leaf, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>创建</div>
+              </div>
+            </Modal>
+          )}
+
+          {showJoin && (
+            <Modal onClose={() => setShowJoin(false)} width={300}>
+              <div className="serif" style={{ fontSize: 17, marginBottom: 6 }}>加入自习室</div>
+              <div style={{ fontSize: 11.5, color: T.ink3, marginBottom: 14 }}>输入好友分享的房间号</div>
+              <input value={joinCode} onChange={e => setJoinCode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') joinRoom(); }} placeholder="房间号" autoFocus style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1px solid ${T.line}`, fontSize: 14, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box' }} />
+              <input value={joinPwd} onChange={e => setJoinPwd(e.target.value)} type="password" placeholder="房间密码（没有可不填）" style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1px solid ${T.line}`, fontSize: 14, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box', marginTop: 10 }} />
+              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                <div onClick={() => setShowJoin(false)} style={{ flex: 1, padding: '11px', borderRadius: 12, border: `1px solid ${T.line}`, color: T.ink2, fontSize: 14, cursor: 'pointer', textAlign: 'center' }}>取消</div>
+                <div onClick={joinRoom} style={{ flex: 1, padding: '11px', borderRadius: 12, background: T.leaf, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>加入</div>
+              </div>
+            </Modal>
+          )}
+
+          {confirmRoom && (
+            <Modal onClose={() => setConfirmRoom(null)} width={290}>
+              <div className="serif" style={{ fontSize: 17, marginBottom: 6, textAlign: 'center' }}>{confirmRoom.action === 'delete' ? '解散自习室？' : '退出自习室？'}</div>
+              <div style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, textAlign: 'center' }}>「{confirmRoom.room.name}」{confirmRoom.action === 'delete' ? '及其留言将不可见。' : '退出后可重新加入。'}</div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+                <div onClick={() => setConfirmRoom(null)} style={{ flex: 1, padding: '11px', borderRadius: 12, border: `1px solid ${T.line}`, color: T.ink2, fontSize: 14, cursor: 'pointer', textAlign: 'center' }}>取消</div>
+                <div onClick={confirmDo} style={{ flex: 1, padding: '11px', borderRadius: 12, background: T.tomato, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>{confirmRoom.action === 'delete' ? '解散' : '退出'}</div>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    /* ============================================================
+       AI 智能助手（FR-9）
+    ============================================================ */
+    function ScreenAi({ onBack, onAiSort }) {
+      const [chat, setChat] = useState([
+        { role: 'ai', text: '嗨，小满。我是青番 AI，可以帮你排待办、看专注规律，还能给改进建议。想先试哪个？' },
+      ]);
+      const reply = (userText, aiText, action) => {
+        setChat(c => [...c, { role: 'user', text: userText }, { role: 'ai', text: aiText, action }]);
+      };
+      const suggestions = [
+        { icon: I.sparkle, title: '给待办排个序', desc: '按难易程度自动安排优先级', onClick: () => { onAiSort(); reply('帮我给待办排个序', '已按「困难 → 中等 → 简单」帮你重新排序，把最费脑的放在精力最旺的时候先完成。', '已执行排序'); } },
+        { icon: I.clock, title: '最佳专注时段', desc: '看看我什么时间效率最高', onClick: () => reply('我今天几点专注最高效？', '你的高效时段是 14:00–16:00 和 20:00–21:30。建议把「写周报」这类硬骨头排在下午，晚上留给轻量阅读。') },
+        { icon: I.chart, title: '本周专注洞察', desc: '生成我的专注报告', onClick: () => reply('看看我这周的洞察', '本周专注 12 小时 05 分，较上周 +18%。深度专注占比 64%，被打断 3 次，主要原因是「消息通知」。') },
+        { icon: I.flame, title: '给我点改进建议', desc: '针对我的习惯个性化建议', onClick: () => reply('给我点改进建议', '建议 1：专注时开启免打扰，减少打断；建议 2：连续 4 个番茄后安排 15 分钟长休息；建议 3：把背单词挪到早晨 08:30，那时打断率最低。') },
+      ];
+      return (
+        <div style={{ height: '100%', background: T.bg, display: 'flex', flexDirection: 'column' }}>
+          {/* 顶栏 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: T.surface, borderBottom: `1px solid ${T.line}` }}>
+            <div onClick={onBack} aria-label="返回" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: T.ink, padding: 4 }}>{I.chevronL(22)}</div>
+            <div style={{ width: 36, height: 36, borderRadius: 11, background: T.leaf, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>{I.sparkle(20)}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>青番 AI</div>
+              <div style={{ fontSize: 11, color: T.leafDeep, display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: T.leaf }} />在线 · 随时为你服务</div>
+            </div>
+          </div>
+
+          {/* 对话区 */}
+          <div style={{ flex: 1, overflow: 'auto', padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {chat.map((m, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', animation: 'fadeUp 0.3s ease' }}>
+                {m.role === 'ai' && <div style={{ width: 26, height: 26, borderRadius: 8, background: T.leaf, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 8, alignSelf: 'flex-end' }}><span className="serif" style={{ fontSize: 11 }}>AI</span></div>}
+                <div style={{ maxWidth: '76%', padding: '11px 14px', borderRadius: 14, background: m.role === 'user' ? T.leaf : T.surface, color: m.role === 'user' ? '#fff' : T.ink, border: m.role === 'user' ? 'none' : `1px solid ${T.line}`, fontSize: 13, lineHeight: 1.6, borderTopLeftRadius: m.role === 'ai' ? 4 : 14, borderTopRightRadius: m.role === 'user' ? 4 : 14 }}>
+                  {m.text}
+                  {m.action && <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: T.leafDeep, background: T.leafSoft, padding: '4px 9px', borderRadius: 8, width: 'fit-content' }}>{I.check(12)} {m.action}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 建议卡片 */}
+          <div style={{ padding: '6px 16px 10px', borderTop: `1px solid ${T.line}`, background: T.bg }}>
+            <div style={{ fontSize: 11, color: T.ink3, marginBottom: 8 }}>试试这些 AI 能力</div>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+              {suggestions.map((s, i) => (
+                <div key={i} onClick={s.onClick} style={{ flexShrink: 0, width: 128, cursor: 'pointer', padding: '11px 12px', background: T.surface, borderRadius: 14, border: `1px solid ${T.line}`, transition: 'transform 0.15s' }} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.96)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}>
+                  <div style={{ color: T.leafDeep, marginBottom: 6 }}>{s.icon(18)}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>{s.title}</div>
+                  <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 3, lineHeight: 1.4 }}>{s.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 输入框 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px 16px', background: T.bg }}>
+            <div style={{ flex: 1, padding: '11px 15px', background: T.surface, borderRadius: 99, border: `1px solid ${T.line}`, fontSize: 13, color: T.ink3 }}>问问 AI 你的专注情况…</div>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: T.leaf, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>{I.chevronR(18)}</div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       桌面小组件（服务卡片预览）
+    ============================================================ */
+    function ScreenWidget({ onBack, trees, withered, streakDays, challengeGoal, doneCount, showToast }) {
+      const [size, setSize] = useState('4x2'); // '2x2' | '4x2' | '4x4'
+      const [added, setAdded] = useState(false);
+      const goal = Math.max(1, challengeGoal);
+      const pct = Math.min(100, Math.round(doneCount / goal * 100));
+      const reached = doneCount >= goal;
+      const sizes = [
+        { key: '2x2', label: '2×2', desc: '极简' },
+        { key: '4x2', label: '4×2', desc: '横条' },
+        { key: '4x4', label: '4×4', desc: '大卡' },
+      ];
+      const apps = [
+        { n: '微', c: '#6E9B57' }, { n: '聊', c: '#5C8BA6' }, { n: '音', c: '#E07A5F' }, { n: '相', c: '#D9A441' },
+        { n: '备', c: '#7FA1B0' }, { n: '青', c: '#E07A5F' }, { n: '阅', c: '#C08A4E' }, { n: '设', c: '#8B6E9B' },
+      ];
+      const renderWidget = (s) => {
+        if (s === '2x2') {
+          return (
+            <div style={{ width: 108, height: 108, background: T.surface, borderRadius: 20, border: `1px solid ${T.line}`, boxShadow: '0 12px 30px rgba(0,0,0,0.10)', padding: 12, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: T.ink2 }}>
+                {I.tomato(15, T.tomato)}<span style={{ fontSize: 10.5, fontWeight: 600 }}>青番</span>
+              </div>
+              <div>
+                <div className="serif" style={{ fontSize: 26, lineHeight: 1, color: T.ink }}>{doneCount}<span style={{ fontSize: 13, color: T.ink3 }}>/{goal}</span></div>
+                <div style={{ fontSize: 10, color: T.ink3, marginTop: 3 }}>今日番茄</div>
+              </div>
+            </div>
+          );
+        }
+        if (s === '4x2') {
+          return (
+            <div style={{ width: 212, height: 104, background: T.surface, borderRadius: 20, border: `1px solid ${T.line}`, boxShadow: '0 12px 30px rgba(0,0,0,0.10)', padding: 13, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: T.ink2 }}>{I.tomato(15, T.tomato)}<span style={{ fontSize: 11.5, fontWeight: 600 }}>青番 · 今日专注</span></div>
+                <span style={{ fontSize: 10, color: reached ? T.gold : T.ink3, fontWeight: 600 }}>{reached ? '✓ 已达成' : `${pct}%`}</span>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
+                  <span className="serif" style={{ fontSize: 22, lineHeight: 1, color: T.ink }}>{doneCount}<span style={{ fontSize: 12, color: T.ink3 }}> / {goal} 番茄</span></span>
+                  <span style={{ fontSize: 10, color: T.ink3, marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>{I.flame(11, T.tomato)} 连签 {streakDays} 天</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 99, background: T.surface2, overflow: 'hidden' }}>
+                  <div style={{ width: `${pct}%`, height: '100%', background: reached ? T.gold : T.leaf, borderRadius: 99, transition: 'width 0.4s' }} />
+                </div>
+              </div>
+            </div>
+          );
+        }
+        // 4x4 大卡
+        return (
+          <div style={{ width: 212, height: 212, background: T.surface, borderRadius: 22, border: `1px solid ${T.line}`, boxShadow: '0 14px 34px rgba(0,0,0,0.12)', padding: 15, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: T.ink2 }}>{I.tomato(16, T.tomato)}<span style={{ fontSize: 12, fontWeight: 600 }}>青番 · 今日专注</span></div>
+              <span style={{ fontSize: 10, color: reached ? T.gold : T.ink3, fontWeight: 600 }}>{reached ? '✓ 达成' : '进行中'}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span className="serif" style={{ fontSize: 34, lineHeight: 1, color: T.ink }}>{doneCount}</span>
+              <span style={{ fontSize: 13, color: T.ink3 }}>/ {goal} 番茄</span>
+            </div>
+            <div style={{ height: 7, borderRadius: 99, background: T.surface2, overflow: 'hidden', marginTop: 10 }}>
+              <div style={{ width: `${pct}%`, height: '100%', background: reached ? T.gold : T.leaf, borderRadius: 99, transition: 'width 0.4s' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 14, flex: 1 }}>
+              <div style={{ flex: 1, background: T.surface2, borderRadius: 13, padding: '10px 11px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: T.leafDeep }}>{I.tree(14)}<span style={{ fontSize: 10.5, color: T.ink2 }}>森林</span></div>
+                <div className="serif" style={{ fontSize: 18, color: T.ink }}>{trees}<span style={{ fontSize: 10, color: T.ink3 }}> 棵</span></div>
+              </div>
+              <div style={{ flex: 1, background: T.surface2, borderRadius: 13, padding: '10px 11px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: T.tomato }}>{I.flame(14)}<span style={{ fontSize: 10.5, color: T.ink2 }}>连签</span></div>
+                <div className="serif" style={{ fontSize: 18, color: T.ink }}>{streakDays}<span style={{ fontSize: 10, color: T.ink3 }}> 天</span></div>
+              </div>
+            </div>
+            <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '9px', borderRadius: 12, background: T.leaf, color: '#fff', fontSize: 12.5, fontWeight: 600 }}>{I.play(14)} 开始专注</div>
+          </div>
+        );
+      };
+      return (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden', background: `linear-gradient(160deg, var(--brand-grad-1) 0%, var(--brand-grad-2) 100%)` }}>
+          {/* 壁纸装饰 */}
+          <svg viewBox="0 0 400 300" style={{ position: 'absolute', left: 0, bottom: -20, width: '100%', opacity: 0.16, pointerEvents: 'none' }}>
+            <path d="M-20 320C60 180 160 120 260 140c80 16 120 60 160 120-40-20-80-20-120 0s-80 40-140 40Z" fill={T.leaf} />
+            <path d="M220 300c-10-60 20-110 70-140-10 70-30 110-70 140Z" fill={T.leafDeep} />
+          </svg>
+
+          {/* 顶栏 */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px 4px', position: 'relative', zIndex: 2 }}>
+            <div>
+              <div className="serif" style={{ fontSize: 20, color: T.ink }}>桌面小组件</div>
+              <div style={{ fontSize: 11, color: T.ink2, marginTop: 2 }}>把专注进度放到手机桌面</div>
+            </div>
+            <div onClick={onBack} aria-label="关闭小组件" style={{ cursor: 'pointer', color: T.ink2, background: T.surface, border: `1px solid ${T.line}`, width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{I.x(18)}</div>
+          </div>
+
+          {/* 桌面主体 */}
+          <div style={{ flex: 1, position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, padding: '8px 0' }}>
+            {/* 模拟应用图标 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+              {apps.map((a, i) => (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 12, background: a.c, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 600, boxShadow: '0 4px 10px rgba(0,0,0,0.12)' }}>{a.n}</div>
+                </div>
+              ))}
+            </div>
+            {/* 小组件预览 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 216 }}>
+              {renderWidget(size)}
+            </div>
+          </div>
+
+          {/* 底部控制 */}
+          <div style={{ position: 'relative', zIndex: 2, background: 'var(--bar)', backdropFilter: 'blur(10px)', borderTop: `1px solid ${T.line}`, padding: '14px 18px 16px' }}>
+            <div style={{ fontSize: 11, color: T.ink3, marginBottom: 10 }}>选择尺寸</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {sizes.map(s => {
+                const active = size === s.key;
+                return (
+                  <div key={s.key} onClick={() => setSize(s.key)} style={{ flex: 1, padding: '10px 0', borderRadius: 13, textAlign: 'center', cursor: 'pointer', background: active ? T.leafSoft : T.surface2, border: active ? `1.5px solid ${T.leaf}` : `1px solid ${T.line}`, transition: 'all 0.15s' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: active ? T.leafDeep : T.ink }}>{s.label}</div>
+                    <div style={{ fontSize: 10, color: T.ink3, marginTop: 1 }}>{s.desc}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div onClick={() => { if (!added) { setAdded(true); showToast('已添加到桌面，随时查看专注进度', I.grid(15, T.leaf)); } }} style={{ marginTop: 12, padding: '13px', borderRadius: 14, textAlign: 'center', fontSize: 14.5, fontWeight: 600, cursor: added ? 'default' : 'pointer', background: added ? T.surface2 : T.leaf, color: added ? T.ink2 : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, transition: 'all 0.2s' }}>
+              {added ? I.check(16) : I.plus(16)}{added ? '已添加到桌面' : '添加到桌面'}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       TabBar
+    ============================================================ */
+    function TabBar({ tab, onChange }) {
+      const items = [
+        { id: 'home', label: '今日', icon: I.leaf },
+        { id: 'study', label: '自习室', icon: I.users },
+        { id: 'stats', label: '统计', icon: I.chart },
+        { id: 'me', label: '我的', icon: I.user },
+      ];
+      return (
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 64, background: 'var(--bar)', backdropFilter: 'blur(10px)', borderTop: `1px solid ${T.line}`, display: 'flex', zIndex: 20 }}>
+          {items.map(it => {
+            const active = tab === it.id;
+            return (
+              <div key={it.id} onClick={() => onChange(it.id)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer', color: active ? T.leafDeep : T.ink3 }}>
+                {it.icon(22)}
+                <span style={{ fontSize: 10.5, fontWeight: active ? 600 : 400 }}>{it.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    /* ============================================================
+       App 状态机
+    ============================================================ */
+    function App() {
+      const [appState, setAppState] = useState('onboarding'); // onboarding | login | main | focus
+      const [tab, setTab] = useState('home');
+      const [loggedIn, setLoggedIn] = useState(false); // 访客模式：未登录可用待办+计时
+      const [signed, setSigned] = useState(false);
+      const [exp, setExp] = useState(2450);
+      const [level, setLevel] = useState(12);
+      const [trees, setTrees] = useState(5);       // 已种下的树
+      const [withered, setWithered] = useState(1);  // 中断而枯萎的树
+      const [streakDays, setStreakDays] = useState(12); // 连续签到天数
+      const [challengeGoal, setChallengeGoal] = useState(4); // 每日挑战目标番茄数（可自定义）
+      const [showGoalPicker, setShowGoalPicker] = useState(false);
+      const [focusTask, setFocusTask] = useState(null);
+      const [showAdd, setShowAdd] = useState(false);
+      const [showComplete, setShowComplete] = useState(false);
+      const [completedTask, setCompletedTask] = useState(null);
+      const [tasks, setTasks] = useState([
+        { id: 1, title: '晨间阅读《心流》30 页', pomos: 1, done: true, difficulty: 'easy' },
+        { id: 2, title: '写本周工作周报', pomos: 2, done: false, difficulty: 'hard' },
+        { id: 3, title: '背 30 个英语单词', pomos: 1, done: false, difficulty: 'medium' },
+        { id: 4, title: '读《认知觉醒》第三章', pomos: 1, done: false, difficulty: 'medium' },
+      ]);
+      const [newTitle, setNewTitle] = useState('');
+      const [showAi, setShowAi] = useState(false);
+      const [theme, setTheme] = useState('green');       // 背景主题：green | dark | dawn | ocean
+      const [showWidget, setShowWidget] = useState(false); // 桌面小组件预览
+      const [toast, setToast] = useState(null);
+      const toastTimer = useRef(null);
+      const showToast = (msg, icon) => {
+        if (toastTimer.current) clearTimeout(toastTimer.current);
+        setToast({ msg, icon, id: Date.now() });
+        toastTimer.current = setTimeout(() => setToast(null), 1600);
+      };
+
+      const handleLogin = () => { setLoggedIn(true); setAppState('main'); };
+      const goLogin = () => setAppState('login');
+      const requireLogin = (msg) => {
+        if (loggedIn) return true;
+        showToast(msg || '登录后即可使用，请到「我的」登录', I.lock(15));
+        setTab('me');
+        return false;
+      };
+      const handleSign = () => {
+        if (!loggedIn) { requireLogin('登录后即可签到'); return; }
+        if (!signed) { setSigned(true); setStreakDays(d => d + 1); setExp(e => e + 10 + (streakDays >= 7 ? 5 : 0)); showToast(`签到成功 +${10 + (streakDays >= 7 ? 5 : 0)} 经验`, I.gift(15)); }
+      };
+      const handleStart = (t) => { setFocusTask(t); setAppState('focus'); };
+      const handleToggleDone = (id) => {
+        setTasks(ts => ts.map(t => {
+          if (t.id === id) {
+            const nd = !t.done;
+            if (nd) { setExp(e => e + t.pomos * 20); showToast(`完成「${t.title}」 +${t.pomos * 20} 经验`, I.star(15)); }
+            return { ...t, done: nd };
+          }
+          return t;
+        }));
+      };
+      const handleAdd = () => {
+        if (newTitle.trim()) {
+          setTasks(ts => [...ts, { id: Date.now(), title: newTitle.trim(), pomos: 1, done: false, difficulty: 'medium' }]);
+          setNewTitle('');
+        }
+        setShowAdd(false);
+      };
+      const handleReorder = (from, to) => {
+        setTasks(ts => {
+          const arr = [...ts];
+          const [moved] = arr.splice(from, 1);
+          arr.splice(to, 0, moved);
+          return arr;
+        });
+      };
+      const handleAiSort = () => {
+        setTasks(ts => {
+          const order = { hard: 0, medium: 1, easy: 2 };
+          return [...ts].sort((a, b) => (order[a.difficulty] ?? 3) - (order[b.difficulty] ?? 3));
+        });
+      };
+      const handleComplete = () => {
+        setCompletedTask(focusTask);
+        setShowComplete(true);
+        setTasks(ts => ts.map(t => t.id === focusTask.id ? { ...t, done: true } : t));
+        setExp(e => e + focusTask.pomos * 20);
+        setTrees(t => t + 1);
+      };
+      const handleQuit = () => { setWithered(w => w + 1); showToast('专注中断，小树苗枯萎了', I.tree(15, T.tomato)); setAppState('main'); setFocusTask(null); };
+      const handleRevive = () => {
+        if (exp < 50) { showToast('经验不足，再专注几次来复活它吧', I.tree(15, T.ink3)); return; }
+        if (withered <= 0) return;
+        setWithered(w => w - 1);
+        setTrees(t => t + 1);
+        setExp(e => e - 50);
+        showToast('成功复活 1 棵树，森林又绿了', I.leaf(15));
+      };
+      const handleCompleteClose = () => { setShowComplete(false); setAppState('main'); setFocusTask(null); };
+      const handleLogout = () => { setLoggedIn(false); setTab('home'); setAppState('main'); };
+
+      // 背景主题切换
+      useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
+      const themeLabels = { green: '青番绿', dark: '深夜墨', dawn: '晨光暖', ocean: '静谧蓝' };
+      const handleSetTheme = (key) => { setTheme(key); showToast(`已切换到「${themeLabels[key]}」主题`, I.palette(15)); };
+
+      // 设备自适应缩放
+      const [scale, setScale] = useState(1);
+      useEffect(() => {
+        const calc = () => {
+          const s = Math.min((window.innerHeight - 60) / 900, (window.innerWidth - 60) / 430, 1.05);
+          setScale(Math.max(0.5, Math.min(s, 1.05)));
+        };
+        calc();
+        window.addEventListener('resize', calc);
+        return () => window.removeEventListener('resize', calc);
+      }, []);
+
+      const renderScreen = () => {
+        if (appState === 'onboarding') return <ScreenOnboarding onDone={() => setAppState('main')} />;
+        if (appState === 'login') return <ScreenLogin onLogin={handleLogin} />;
+        if (appState === 'focus') return <ScreenFocus task={focusTask} onQuit={handleQuit} onComplete={handleComplete} />;
+        switch (tab) {
+          case 'home': return <ScreenHome onStart={handleStart} onAdd={() => setShowAdd(true)} signed={signed} onSign={handleSign} tasks={tasks} onToggleDone={handleToggleDone} onReorder={handleReorder} onAiSort={handleAiSort} onOpenAi={() => { if (requireLogin('登录后即可使用 AI 助手')) setShowAi(true); }} challengeGoal={challengeGoal} onEditGoal={() => setShowGoalPicker(true)} />;
+          case 'study': return <ScreenStudyRoom onStart={handleStart} showToast={showToast} />;
+          case 'stats': return <ScreenStats />;
+          case 'me': return <ScreenMe loggedIn={loggedIn} onLogin={goLogin} signed={signed} onSign={handleSign} exp={exp} level={level} trees={trees} withered={withered} streakDays={streakDays} onRevive={handleRevive} onLogout={handleLogout} theme={theme} onSetTheme={handleSetTheme} onOpenWidget={() => setShowWidget(true)} />;
+          default: return null;
+        }
+      };
+
+      const modules = [
+        { name: '登录与账户', active: appState === 'login' },
+        { name: '待办与今日计划', active: tab === 'home' },
+        { name: '每日挑战目标', active: tab === 'home' },
+        { name: '专注倒计时（锁屏）', active: appState === 'focus' },
+        { name: '背景 / 白噪音切换', active: appState === 'focus' },
+        { name: '数据统计与 AI 分析', active: tab === 'stats' },
+        { name: '每日完成时间轴', active: tab === 'stats' },
+        { name: '签到 · 经验值 · 等级', active: tab === 'me' },
+        { name: '连续签到打卡日历', active: tab === 'me' },
+        { name: '专注森林 · 种树激励', active: tab === 'me' },
+        { name: '自习室 · 共同自习', active: tab === 'study' },
+        { name: 'AI 智能助手', active: showAi },
+        { name: '背景主题切换', active: tab === 'me' },
+        { name: '桌面小组件', active: showWidget },
+      ];
+
+      return (
+        <div className="stage-wrap">
+          <div className="stage-side">
+            <div className="stage-brand">
+              <div className="mark"><LeafLogo size={44} /></div>
+              <div>
+                <div className="name">青番</div>
+                <div className="en">QINGFAN · AI POMODORO</div>
+              </div>
+            </div>
+            <div className="stage-tagline">把专注，种成一片森林。<br />一款会陪你成长的 AI 番茄钟智能助手。</div>
+            <div className="stage-modules">
+              <div className="title">功能模块</div>
+              {modules.map((m, i) => (
+                <div key={i} className={`stage-module ${m.active ? 'done' : ''}`}>
+                  <span className="dot" />
+                  <span>{m.name}</span>
+                  <span className="num">{String(i + 1).padStart(2, '0')}</span>
+                </div>
+              ))}
+            </div>
+            <div className="stage-hint">
+              <b>操作提示</b><br />开场引导看「为什么选青番」· 登录后点「开始」专注，完成后种树、中断会枯萎 · 首页看「今日挑战」进度，点「调整」自定义目标番茄数 · 「我的」页看森林与打卡日历、切换背景主题、预览桌面小组件 · 长按待办拖动排序 · 点 AI 卡片进助手 · 切「自习室」好友共学。
+            </div>
+          </div>
+
+          <div className="phone-col" style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}>
+            <HarmonyFrame dark={theme === 'dark'}>
+              <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+                <div key={appState === 'main' ? tab : appState} style={{ height: '100%', animation: 'fadeUp 0.28s ease' }}>
+                  {renderScreen()}
+                </div>
+                {appState === 'main' && <TabBar tab={tab} onChange={(id) => {
+                  if ((id === 'stats' || id === 'study') && !loggedIn) { requireLogin('登录后即可使用，请到「我的」登录'); return; }
+                  setTab(id);
+                }} />}
+
+                {/* AI 助手全屏覆盖层 */}
+                {showAi && (
+                  <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: T.bg, animation: 'fadeUp 0.25s ease' }}>
+                    <ScreenAi onBack={() => setShowAi(false)} onAiSort={handleAiSort} />
+                  </div>
+                )}
+
+                {/* 桌面小组件预览覆盖层 */}
+                {showWidget && (
+                  <div style={{ position: 'absolute', inset: 0, zIndex: 60, background: T.bg, animation: 'fadeUp 0.25s ease' }}>
+                    <ScreenWidget onBack={() => setShowWidget(false)} trees={trees} withered={withered} streakDays={streakDays} challengeGoal={challengeGoal} doneCount={tasks.filter(t => t.done).length} showToast={showToast} />
+                  </div>
+                )}
+
+                {/* 轻提示 */}
+                {toast && <Toast key={toast.id} msg={toast.msg} icon={toast.icon} />}
+
+                {/* 添加待办弹窗 */}
+                {showAdd && (
+                  <Modal onClose={() => setShowAdd(false)} width={290}>
+                    <div className="serif" style={{ fontSize: 17, marginBottom: 14 }}>添加待办</div>
+                    <input value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }} placeholder="想专注做什么？" autoFocus style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1px solid ${T.line}`, fontSize: 14, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2 }} />
+                    <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                      <div onClick={() => setShowAdd(false)} style={{ flex: 1, padding: '11px', borderRadius: 12, border: `1px solid ${T.line}`, color: T.ink2, fontSize: 14, cursor: 'pointer', textAlign: 'center' }}>取消</div>
+                      <div onClick={handleAdd} style={{ flex: 1, padding: '11px', borderRadius: 12, background: T.leaf, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>添加</div>
+                    </div>
+                  </Modal>
+                )}
+
+                {/* 挑战目标设置弹窗 */}
+                {showGoalPicker && (
+                  <Modal onClose={() => setShowGoalPicker(false)} width={300}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ width: 48, height: 48, borderRadius: 14, background: T.goldSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.gold, margin: '0 auto' }}>{I.trophy(28)}</div>
+                      <div className="serif" style={{ fontSize: 17, marginTop: 12 }}>自定义每日挑战</div>
+                      <div style={{ fontSize: 12, color: T.ink2, marginTop: 4 }}>每天想专注几个番茄？达成奖励 +50 经验</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 16 }}>
+                        {[2, 4, 6, 8].map(g => (
+                          <div key={g} onClick={() => { setChallengeGoal(g); setShowGoalPicker(false); showToast(`今日目标已设为 ${g} 个番茄`, I.trophy(15, T.gold)); }} style={{
+                            padding: '14px 0', borderRadius: 14, textAlign: 'center', cursor: 'pointer',
+                            background: challengeGoal === g ? T.leaf : T.surface2,
+                            color: challengeGoal === g ? '#fff' : T.ink,
+                            border: challengeGoal === g ? '1px solid transparent' : `1px solid ${T.line}`,
+                            fontSize: 17, fontWeight: 700, transition: 'all 0.15s',
+                          }}>{g}</div>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 11, color: T.ink3, marginTop: 12 }}>目标越高越有挑战，完成后经验照常到账。</div>
+                    </div>
+                  </Modal>
+                )}
+
+                {/* 完成庆祝弹窗 */}
+                {showComplete && (
+                  <Modal onClose={handleCompleteClose} width={290}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', position: 'relative', height: 60 }}>
+                        {[0,1,2,3,4].map(i => (
+                          <span key={i} style={{ position: 'absolute', left: `calc(50% + ${(i-2)*18}px)`, top: 8, width: 8, height: 8, borderRadius: i%2? '50%' : '3px', background: i%2 ? T.tomato : T.leaf, animation: `confetti 1.2s ${i*0.1}s ease infinite` }} />
+                        ))}
+                        <div style={{ animation: 'floatY 2.5s ease-in-out infinite' }}>{I.tomato(46, T.tomato)}</div>
+                      </div>
+                      <div className="serif" style={{ fontSize: 19, marginTop: 8 }}>专注完成！</div>
+                      <div style={{ fontSize: 12.5, color: T.ink2, marginTop: 6, lineHeight: 1.6 }}>「{completedTask?.title}」已完成</div>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 12, margin: '14px 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: T.ink2 }}>{I.flame(15, T.tomato)} 番茄 +1</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: T.ink2 }}>{I.star(15, T.gold)} 经验 +{completedTask ? completedTask.pomos * 20 : 0}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: T.leafDeep }}>{I.tree(15)} 种下 1 棵树</div>
+                      </div>
+                      <div onClick={handleCompleteClose} style={{ padding: '12px', borderRadius: 13, background: T.leaf, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>太棒了</div>
+                    </div>
+                  </Modal>
+                )}
+              </div>
+            </HarmonyFrame>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

@@ -6,6 +6,7 @@ import { themeOf } from '../model/Types';
 @Component
 struct Complete {
   @State taskId: string = '';
+  @State customTitle: string = '';
   @State expGain: number = 20;
   @State bounce: number = 0;
 
@@ -13,6 +14,7 @@ struct Complete {
     const p = router.getParams() as Record<string, Object>;
     if (p) {
       this.taskId = (p['taskId'] ?? '') as string;
+      this.customTitle = (p['title'] ?? '') as string;
       this.expGain = (p['exp'] ?? 20) as number;
     }
     let i = 0;
@@ -24,6 +26,9 @@ struct Complete {
   }
 
   taskTitle(): string {
+    if (this.customTitle.length > 0) {
+      return this.customTitle;
+    }
     return AppState.instance.tasks.find(t => t.id === this.taskId)?.title ?? '';
   }
 
