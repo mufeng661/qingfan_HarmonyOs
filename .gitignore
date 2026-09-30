@@ -24,3 +24,6 @@ entry/src/main/ets/model/CloudConfig.ets
 # AI 技能包（第三方安装，可用 npx skills add 复原，不入库）
 /.agents
 /skills-lock.json
+
+# 云函数依赖（部署时云端安装，不入库）
+cloudfunctions/**/node_modules

@@ -97,7 +97,7 @@ UI(page) ──调用──▶ service ──HTTP──▶ CloudBase 云函数 s
   - 鸿蒙：`service/CloudFnService` → HTTP 访问服务地址（`model/CloudBase.ets`）。
   - Web：`api.js` 的 `call()` → `config.js.fnUrl`（免鉴权 HTTP 访问服务）或网关 `/v1/functions`。
   - 小程序：`wx.cloud.callFunction({ name:'studyRoomFunctions', data })`。
-- **数据互通**：房间（`rooms_self`）、成员（`room_members_self`）、留言（`comments_self`）三端共享；**房间号 = room.id（UUID）**，跨端可直接加入。
+- **数据互通**：房间（`rooms_self`）、成员（`room_members_self`）、留言（`comments_self`）三端共享；**房间号 = 6 位数字 `room_no`**（对外即 `Room.id`），跨端可直接加入。
 - **端内数据**：待办 / 专注统计 / 成长体系在**各端本地**按账号隔离存储（未上云）；三端各自实现同一套功能。
 - **功能一致**：三端功能范围完全一致（见 PRD §6），仅技术栈与页面载体不同。
 - **登录页三端一致**：登录=手机号+密码；注册=用户名+手机号+密码+确认密码+验证码（演示码 1234）。

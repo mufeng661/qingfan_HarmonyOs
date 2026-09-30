@@ -23,6 +23,7 @@ struct StudyRoomPage {
   @State rooms: Room[] = [];
   @State roomError: string = '';
   @State loading: boolean = false;
+  @State refreshing: boolean = false;
   // 创建
   @State showCreate: boolean = false;
   @State newName: string = '';
@@ -58,6 +59,22 @@ struct StudyRoomPage {
     this.loadRooms();
   }
 
+  onPageShow() {
+    this.loadRooms();
+  }
+
+  onRefresh() {
+    this.refreshing = true;
+    this.loadRooms();
+    if (this.showBoard && this.boardRoomId.length > 0) {
+      this.loadMessages();
+    }
+    setTimeout(() => {
+      this.refreshing = false;
+      promptAction.showToast({ message: '已刷新', duration: 1200 });
+    }, 600);
+  }
+
   private userId(): string {
     return AppState.userKey();
   }
@@ -69,14 +86,7 @@ struct StudyRoomPage {
       const fixed: Room[] = [];
       for (let i = 0; i < list.length; i++) {
         const r = list[i];
-        try {
-          const detail = await CloudRoomService.get(this.userId(), r.id);
-          r.member_count = detail.member_count;
-          r.role = detail.role;
-          r.need_password = detail.need_password;
-        } catch (e) {
-          // 单个房间取详情失败时保留列表值
-        }
+        r.id = String(r.id);
         fixed.push(r);
       }
       this.rooms = fixed;
@@ -345,46 +355,49 @@ struct StudyRoomPage {
           .width('100%')
           .padding({ left: 22, right: 22, top: 20, bottom: 16 })
 
-          Scroll() {
-            Column() {
-              if (this.roomError.length > 0) {
-                Text(this.roomError)
-                  .fontSize(12).fontColor(this.t.tomato)
+          Refresh({ refreshing: $$this.refreshing }) {
+            Scroll() {
+              Column() {
+                if (this.roomError.length > 0) {
+                  Text(this.roomError)
+                    .fontSize(12).fontColor(this.t.tomato)
+                    .width('100%').margin({ bottom: 12 })
+                }
+
+                Text('我的自习室')
+                  .fontFamily(FONT_DISPLAY).fontSize(16).fontColor(this.t.ink)
                   .width('100%').margin({ bottom: 12 })
-              }
 
-              Text('我的自习室')
-                .fontFamily(FONT_DISPLAY).fontSize(16).fontColor(this.t.ink)
-                .width('100%').margin({ bottom: 12 })
-
-              if (this.rooms.length === 0) {
-                Column() {
-                  Text('🏠').fontSize(48)
-                  Text(this.loading ? '加载中…' : '还没有自习室')
-                    .fontSize(14).fontColor(this.t.ink2).margin({ top: 12 })
-                  Text('点右上角「创建」新建，或「加入」输入房间号')
-                    .fontSize(12).fontColor(this.t.ink3).margin({ top: 6 })
+                if (this.rooms.length === 0) {
+                  Column() {
+                    Text('🏠').fontSize(48)
+                    Text(this.loading ? '加载中…' : '还没有自习室')
+                      .fontSize(14).fontColor(this.t.ink2).margin({ top: 12 })
+                    Text('点右上角「创建」新建，或「加入」输入房间号')
+                      .fontSize(12).fontColor(this.t.ink3).margin({ top: 6 })
+                  }
+                  .width('100%')
+                  .padding({ top: 50, bottom: 50 })
+                  .alignItems(HorizontalAlign.Center)
+                } else {
+                  Column({ space: 10 }) {
+                    ForEach(this.rooms, (r: Room) => {
+                      this.roomCard(r)
+                    }, (r: Room) => r.id)
+                  }
+                  .width('100%')
                 }
-                .width('100%')
-                .padding({ top: 50, bottom: 50 })
-                .alignItems(HorizontalAlign.Center)
-              } else {
-                Column({ space: 10 }) {
-                  ForEach(this.rooms, (r: Room) => {
-                    this.roomCard(r)
-                  }, (r: Room) => r.id)
-                }
-                .width('100%')
-              }
 
-              Column().height(20)
+                Column().height(20)
+              }
+              .width('100%')
+              .padding({ left: 22, right: 22, top: 4 })
             }
-            .width('100%')
-            .padding({ left: 22, right: 22, top: 4 })
+            .scrollBar(BarState.Off)
+            .edgeEffect(EdgeEffect.Spring)
           }
           .layoutWeight(1)
-          .scrollBar(BarState.Off)
-          .edgeEffect(EdgeEffect.Spring)
+          .onRefreshing(() => { this.onRefresh(); })
 
           TabBar({ active: 'study' })
         }

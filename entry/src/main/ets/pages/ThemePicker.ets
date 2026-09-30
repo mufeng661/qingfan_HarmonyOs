@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { router, promptAction } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
 import { themeOf, THEMES, ThemeKey, ThemeDef } from '../model/Types';
 
@@ -6,7 +6,23 @@ import { themeOf, THEMES, ThemeKey, ThemeDef } from '../model/Types';
 @Component
 struct ThemePicker {
   @State uiTick: number = 0;
+  @State refreshing: boolean = false;
   private t: ThemeDef = themeOf(AppState.instance.themeKey);
+
+  onPageShow() {
+    this.t = themeOf(AppState.instance.themeKey);
+    this.uiTick += 1;
+  }
+
+  onRefresh() {
+    this.refreshing = true;
+    this.t = themeOf(AppState.instance.themeKey);
+    this.uiTick += 1;
+    setTimeout(() => {
+      this.refreshing = false;
+      promptAction.showToast({ message: '已刷新', duration: 1200 });
+    }, 600);
+  }
 
   build() {
     Column() {
@@ -26,7 +42,8 @@ struct ThemePicker {
         .width('100%')
         .padding({ left: 16 })
 
-      Scroll() {
+      Refresh({ refreshing: $$this.refreshing }) {
+        Scroll() {
         Column({ space: 12 }) {
           ForEach(THEMES, (th: ThemeDef) => {
             Row() {
@@ -64,9 +81,11 @@ struct ThemePicker {
         }
         .padding({ left: 16, right: 16, top: 12 })
       }
-      .layoutWeight(1)
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
+      }
+      .layoutWeight(1)
+      .onRefreshing(() => { this.onRefresh(); })
     }
     .width('100%')
     .height('100%')

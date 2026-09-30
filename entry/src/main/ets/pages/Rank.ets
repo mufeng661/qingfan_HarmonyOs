@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { router, promptAction } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
 import { themeOf, FRIEND_RANK, FriendRankItem, ThemeDef, FONT_DISPLAY } from '../model/Types';
 import { TabBar } from '../components/TabBar';
@@ -15,8 +15,23 @@ interface RankRow {
 @Entry
 @Component
 struct Rank {
+  @State refreshing: boolean = false;
+  @State uiTick: number = 0;
   private t: ThemeDef = themeOf(AppState.instance.themeKey);
   private medalColors: string[] = ['#D9A441', '#9AA6B2', '#C08A5E'];
+
+  onPageShow() {
+    this.uiTick += 1;
+  }
+
+  onRefresh() {
+    this.refreshing = true;
+    this.uiTick += 1;
+    setTimeout(() => {
+      this.refreshing = false;
+      promptAction.showToast({ message: '已刷新', duration: 1200 });
+    }, 600);
+  }
 
   build() {
     Column() {
@@ -37,7 +52,8 @@ struct Rank {
       .width('100%')
       .padding({ left: 22, right: 22, top: 20, bottom: 16 })
 
-      Scroll() {
+      Refresh({ refreshing: $$this.refreshing }) {
+        Scroll() {
         Column() {
           this.myCard()
           Column({ space: 10 }) {
@@ -51,9 +67,11 @@ struct Rank {
         .width('100%')
         .padding({ left: 22, right: 22, top: 4 })
       }
-      .layoutWeight(1)
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
+      }
+      .layoutWeight(1)
+      .onRefreshing(() => { this.onRefresh(); })
 
       TabBar({ active: 'rank' })
     }

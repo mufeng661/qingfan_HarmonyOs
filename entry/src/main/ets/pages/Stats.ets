@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { router, promptAction } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
 import { themeOf, ThemeDef, FONT_DISPLAY, FocusRecord, DailyStats } from '../model/Types';
 import { todayKey, pad2, formatHM } from '../model/Store';
@@ -17,7 +17,36 @@ interface TimeLineRow {
 @Component
 struct Stats {
   @State range: RangeKey = 'day';
+  @State refreshing: boolean = false;
+  @State focusText: string = '';
+  @State pomoText: string = '';
+  @State rateText: string = '';
+  @State rows: TimeLineRow[] = [];
   private t: ThemeDef = themeOf(AppState.instance.themeKey);
+
+  aboutToAppear() {
+    this.refresh();
+  }
+
+  onPageShow() {
+    this.refresh();
+  }
+
+  onRefresh() {
+    this.refreshing = true;
+    this.refresh();
+    setTimeout(() => {
+      this.refreshing = false;
+      promptAction.showToast({ message: '已刷新', duration: 1200 });
+    }, 600);
+  }
+
+  refresh() {
+    this.focusText = this.focusHours();
+    this.pomoText = this.pomoTotal() + '';
+    this.rateText = this.completionRate() + '%';
+    this.rows = this.timelineRows();
+  }
 
   build() {
     Column() {
@@ -37,7 +66,8 @@ struct Stats {
       .width('100%')
       .padding({ left: 22, right: 22, top: 20, bottom: 14 })
 
-      Scroll() {
+      Refresh({ refreshing: $$this.refreshing }) {
+        Scroll() {
         Column() {
           this.dataCard()
           this.aiCard()
@@ -53,9 +83,11 @@ struct Stats {
         .width('100%')
         .padding({ left: 22, right: 22, top: 4 })
       }
-      .layoutWeight(1)
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
+      }
+      .layoutWeight(1)
+      .onRefreshing(() => { this.onRefresh(); })
 
       TabBar({ active: 'stats' })
     }
@@ -80,9 +112,9 @@ struct Stats {
   @Builder
   dataCard() {
     Row() {
-      this.dataItem('⏱', this.focusHours(), '专注时长', this.t.leafDeep, true)
-      this.dataItem('🍅', this.pomoTotal() + '', '完成番茄', this.t.tomato, true)
-      this.dataItem('⭐', this.completionRate() + '%', '任务完成率', this.t.gold, false)
+      this.dataItem('⏱', this.focusText, '专注时长', this.t.leafDeep, true)
+      this.dataItem('🍅', this.pomoText, '完成番茄', this.t.tomato, true)
+      this.dataItem('⭐', this.rateText, '任务完成率', this.t.gold, false)
     }
     .width('100%')
     .padding({ top: 18, bottom: 18, left: 20, right: 20 })
@@ -170,7 +202,7 @@ struct Stats {
         .margin({ left: 6, top: 8 })
 
       Column() {
-        ForEach(this.timelineRows(), (r: TimeLineRow, i: number) => {
+        ForEach(this.rows, (r: TimeLineRow, i: number) => {
           Row() {
             // 圆点
             Column()

@@ -33,6 +33,7 @@ struct Home {
   @State guideStep: number = 0;
   @State bubbleH: number = 170;
   @State signedToday: boolean = false;
+  @State refreshing: boolean = false;
   @State streakDays: number = 0;
   @State showDeleteConfirm: boolean = false;
   @State pendingDeleteId: string = '';
@@ -90,6 +91,18 @@ struct Home {
     this.refreshTodayStats();
     this.refreshTasks();
     this.syncUserState();
+  }
+
+  onRefresh() {
+    this.refreshing = true;
+    this.lastDayKey = todayKey();
+    this.refreshTodayStats();
+    this.refreshTasks();
+    this.syncUserState();
+    setTimeout(() => {
+      this.refreshing = false;
+      this.toast('已刷新');
+    }, 600);
   }
 
   syncUserState() {
@@ -380,7 +393,12 @@ struct Home {
         this.challengeCard()
         this.aiTipCard()
         this.todoHeader()
-        this.todoList()
+
+        Refresh({ refreshing: $$this.refreshing }) {
+          this.todoList()
+        }
+        .layoutWeight(1)
+        .onRefreshing(() => { this.onRefresh(); })
 
         Column() {
           TabBar({ active: 'home' })
@@ -610,7 +628,6 @@ struct Home {
         }, (t: TaskItem) => t.id)
       }
     }
-    .layoutWeight(1)
     .width('100%')
     .padding({ left: 22, right: 22, top: 4, bottom: 8 })
     .scrollBar(BarState.Off)

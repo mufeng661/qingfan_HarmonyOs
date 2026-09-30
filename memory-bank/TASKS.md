@@ -48,4 +48,4 @@
 - [ ] C3 真实短信验证码 / 真实微信登录（当前为演示）
 - [ ] C4 专注统计上云（当前为本地按账号隔离）
 - [ ] C5 删除无入口的 `Rank` 页面（或改从「我的」进入）
-- [ ] C6 云函数 `listMine` 的 `member_count` 修正（当前恒为 1，App 已用 `room.get` 兜底）
+- [x] C6 云函数 `listMine` 的 `member_count` 修正（改为 `select("room_id,user_id")` 避免整行去重）；同时修复 `room.create` 的 `room_no` 唯一冲突（生成唯一 6 位房间号）

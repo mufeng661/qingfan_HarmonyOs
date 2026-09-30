@@ -32,6 +32,7 @@ struct Me {
   @State signedToday: boolean = false;
   @State streakDays: number = 0;
   @State loggedIn: boolean = false;
+  @State refreshing: boolean = false;
   private t: ThemeDef = themeOf(AppState.instance.themeKey);
   private midnightTimerId: number = -1;
   private lastDayKey: string = '';
@@ -61,6 +62,16 @@ struct Me {
     this.uiTick += 1;
   }
 
+  onRefresh() {
+    this.refreshing = true;
+    this.syncUserState();
+    this.uiTick += 1;
+    setTimeout(() => {
+      this.refreshing = false;
+      promptAction.showToast({ message: '已刷新', duration: 1200 });
+    }, 600);
+  }
+
   syncUserState() {
     const s = AppState.recomputeStreak();
     AppState.saveUser();
@@ -86,6 +97,7 @@ struct Me {
         .backgroundColor(this.t.bg)
       } else {
         Column() {
+          Refresh({ refreshing: $$this.refreshing }) {
           Scroll() {
             Column() {
               this.profileHeader()
@@ -105,9 +117,11 @@ struct Me {
             .width('100%')
             .padding({ left: 22, right: 22, top: 20 })
           }
-          .layoutWeight(1)
           .scrollBar(BarState.Off)
           .edgeEffect(EdgeEffect.Spring)
+          }
+          .layoutWeight(1)
+          .onRefreshing(() => { this.onRefresh(); })
 
           TabBar({ active: 'me' })
         }

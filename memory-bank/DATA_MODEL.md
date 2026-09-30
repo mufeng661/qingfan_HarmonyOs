@@ -61,16 +61,16 @@ Preferences 库名 `qf_store`。**业务数据按账号隔离**：key = `基础k
 公共字段：请求体带 `action` / `userId` / `platform:'harmony'`，请求头 `x-user-id` / `x-user-platform`。
 
 ```ts
-Room       { id:string(UUID), name, owner_id, need_password, created_at, updated_at, role:'owner'|'member', member_count, members?: RoomMember[] }
+Room       { id:string(6 位房间号), name, owner_id, need_password, created_at, updated_at, role:'owner'|'member', member_count, members?: RoomMember[] }
 RoomMember { user_id, role, joined_at, nickname?, focus_minutes? }   // 后两者为「待后端支持」的可选字段
 Comment    { id:number, project_id(=roomId), parent_id, root_id, reply_to_name, nickname, content, role, likes, liked, can_delete, created_at }
 ```
 
 ### 3.2 云表（MySQL）
 
-- `rooms_self`：房间（id/name/owner_id/need_password/created_at/updated_at）。
-- `room_members_self`：房间成员（room_id/user_id/role/joined_at）。
-- `comments_self`：留言（id/project_id/parent_id/nickname/content/role/created_at/updated_at）。
+- `rooms_self`：房间（`id` bigint 自增 PK / `room_no` varchar(32) 唯一（6 位房间号，对外即 `Room.id`）/ name / owner_id / password_hash / password_salt / is_deleted / created_at / updated_at）。**创建时由云函数生成唯一 `room_no` 写入**。
+- `room_members_self`：房间成员（`room_id` char(6)=房间号 / user_id / role / joined_at / updated_at / last_active_at）。
+- `comments_self`：留言（id/project_id(=房间号)/parent_id/root_id/nickname/content/role/likes/liked_by/created_at/updated_at）。
 
 > 待办：如需「成员真实专注时长排行」，需在 `room_members_self` 增加 `focus_minutes`、`nickname`，并新增云函数 action `focus.record`、在 `room.get` 返回这两个字段。
 

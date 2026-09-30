@@ -36,6 +36,14 @@
 - 底部导航删除「排行」标签（排行移入自习室计时界面的「房间成员」）。
 - 房间成员排行展示专注时长（本人本机累计；`focus.record` 上报已预留，云函数未支持时自动忽略）。
 
+### 2026-09-30
+
+- 修复云函数 `room.create` 失败：线上 `rooms_self` 实为 `id`(bigint 自增 PK) + `room_no`(varchar 唯一非空) 双列结构，旧代码只写 `id`、漏写 `room_no`，触发 `Field 'room_no' doesn't have a default value` / `Duplicate entry '' for key 'uk_rooms_room_no'`。改为**生成唯一 6 位 `room_no` 写入**，并让 `room.get` / `room.listMine` / `room.join` 以 `room_no` 作为 `id` 下发（房间号语义由 UUID 改为 6 位数字）。
+- 修复 `room.listMine` 的 `member_count` 恒为 1：`.in("room_id", …)` 只选 `room_id` 时，同房间多行内容完全相同被整行去重；改为 `select("room_id,user_id")` 后计数正确（App 端 `room.get` 兜底可移除，暂留无害）。
+- 云函数 `studyRoomFunctions` 源码纳入本地管理（`index/cloudbase/auth/token/password/utils` + `schema.sql`）；确认该环境（`cloud1-d5g8q89yd66340db4`）当前账号**已可访问与部署**。
+- 部署要点：`tcb fn code update` 需在函数目录内执行（否则按 `functionRootPath`=当前目录打包），`--deployMode zip` 在含依赖时超 1.5MB 上限，改用**不含 `node_modules` 的源码包**走 ZIP base64（云端按 `InstallDependency` 安装依赖）。
+- 联调通过：`room.create → room.get → room.join → comment.add → comment.list → room.listMine → room.delete` 全链路正常，中文名/留言入库与回读无误；联调数据已清理。
+
 ### Web / 小程序端（`qingfan(web)` 及同构小程序）
 
 - **功能与鸿蒙端一致**：引导、登录注册、今日待办、专注计时、成长（我的）、统计、自习室、主题、AI 助手。
@@ -46,6 +54,5 @@
 
 ## 已知问题 / 依赖后端
 
-- 云函数 `room.listMine` 的 `member_count` 恒为 1（App 用 `room.get` 兜底修正）。
 - 云函数无 `focus.record` 与成员 `nickname/focus_minutes`，故成员真实昵称/真实时长排行暂不可得。
-- 该云函数环境（`cloud1-d5g8q89yd66340db4`）不属于当前登录账号，App 侧无法改其表/函数。
+- （已解决 09-30）`room.create` 的 `room_no` 唯一约束冲突、`room.listMine` 的 `member_count` 恒为 1、该环境不可访问。
