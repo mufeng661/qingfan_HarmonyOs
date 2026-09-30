@@ -43,6 +43,8 @@
 - 云函数 `studyRoomFunctions` 源码纳入本地管理（`index/cloudbase/auth/token/password/utils` + `schema.sql`）；确认该环境（`cloud1-d5g8q89yd66340db4`）当前账号**已可访问与部署**。
 - 部署要点：`tcb fn code update` 需在函数目录内执行（否则按 `functionRootPath`=当前目录打包），`--deployMode zip` 在含依赖时超 1.5MB 上限，改用**不含 `node_modules` 的源码包**走 ZIP base64（云端按 `InstallDependency` 安装依赖）。
 - 联调通过：`room.create → room.get → room.join → comment.add → comment.list → room.listMine → room.delete` 全链路正常，中文名/留言入库与回读无误；联调数据已清理。
+- 自习室房间号支持复制：房间卡片与留言弹窗均加复制入口（`@kit.BasicServicesKit` 剪贴板 + Toast）；创建成功后自动复制房间号；加入弹窗文案改为「6 位数字」。
+- 自习室房间卡片重排：文字（房间名/房间号/人数/开始自习）左对齐、图标（💬 标题行右、📋 房间号行右）右对齐；删除/退出由卡片按钮改为**列表左滑**（`List + ListItem.swipeAction`，露出「解散 / 退出」后走二次确认弹窗）。
 
 ### Web / 小程序端（`qingfan(web)` 及同构小程序）
 

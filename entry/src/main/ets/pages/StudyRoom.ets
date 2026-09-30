@@ -1,5 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
+import { pasteboard } from '@kit.BasicServicesKit';
 import { AppState } from '../model/AppState';
 import { themeOf, ThemeDef, FONT_DISPLAY } from '../model/Types';
 import { TabBar } from '../components/TabBar';
@@ -111,13 +112,17 @@ struct StudyRoomPage {
     if (this.creating) return;
     this.creating = true;
     try {
-      await CloudRoomService.create(this.userId(), name, this.usePwd ? this.newPwd : '');
+      const room = await CloudRoomService.create(this.userId(), name, this.usePwd ? this.newPwd : '');
       this.showCreate = false;
       this.newName = '';
       this.newPwd = '';
       this.usePwd = false;
       await this.loadRooms();
-      promptAction.showToast({ message: '自习室已创建', duration: 1500 });
+      const copied = await this.copyRoomId(room.id, true);
+      promptAction.showToast({
+        message: copied ? '自习室已创建，房间号已复制' : ('自习室已创建，房间号 ' + room.id),
+        duration: 1800
+      });
     } catch (e) {
       promptAction.showToast({ message: '创建失败，请稍后重试', duration: 1500 });
     } finally {
@@ -193,6 +198,23 @@ struct StudyRoomPage {
     AppState.instance.currentRoomId = r.id;
     AppState.instance.currentRoomMode = 'study';
     router.pushUrl({ url: 'pages/Focus', params: { roomId: r.id, roomName: r.name } });
+  }
+
+  async copyRoomId(id: string, silent: boolean = false): Promise<boolean> {
+    if (!id) return false;
+    try {
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, id);
+      await pasteboard.getSystemPasteboard().setData(data);
+      if (!silent) {
+        promptAction.showToast({ message: '房间号已复制', duration: 1500 });
+      }
+      return true;
+    } catch (e) {
+      if (!silent) {
+        promptAction.showToast({ message: '复制失败，请重试', duration: 1500 });
+      }
+      return false;
+    }
   }
 
   openBoard(r: Room) {
@@ -356,19 +378,23 @@ struct StudyRoomPage {
           .padding({ left: 22, right: 22, top: 20, bottom: 16 })
 
           Refresh({ refreshing: $$this.refreshing }) {
-            Scroll() {
-              Column() {
-                if (this.roomError.length > 0) {
+            List({ space: 10 }) {
+              if (this.roomError.length > 0) {
+                ListItem() {
                   Text(this.roomError)
                     .fontSize(12).fontColor(this.t.tomato)
-                    .width('100%').margin({ bottom: 12 })
+                    .width('100%')
                 }
+              }
 
+              ListItem() {
                 Text('我的自习室')
                   .fontFamily(FONT_DISPLAY).fontSize(16).fontColor(this.t.ink)
-                  .width('100%').margin({ bottom: 12 })
+                  .width('100%')
+              }
 
-                if (this.rooms.length === 0) {
+              if (this.rooms.length === 0) {
+                ListItem() {
                   Column() {
                     Text('🏠').fontSize(48)
                     Text(this.loading ? '加载中…' : '还没有自习室')
@@ -379,20 +405,26 @@ struct StudyRoomPage {
                   .width('100%')
                   .padding({ top: 50, bottom: 50 })
                   .alignItems(HorizontalAlign.Center)
-                } else {
-                  Column({ space: 10 }) {
-                    ForEach(this.rooms, (r: Room) => {
-                      this.roomCard(r)
-                    }, (r: Room) => r.id)
-                  }
-                  .width('100%')
                 }
+              } else {
+                ForEach(this.rooms, (r: Room) => {
+                  ListItem() {
+                    this.roomCard(r)
+                  }
+                  .swipeAction({
+                    end: {
+                      builder: () => { this.roomSwipeAction(r) }
+                    }
+                  })
+                }, (r: Room) => r.id)
+              }
 
+              ListItem() {
                 Column().height(20)
               }
-              .width('100%')
-              .padding({ left: 22, right: 22, top: 4 })
             }
+            .width('100%')
+            .padding({ left: 22, right: 22, top: 4 })
             .scrollBar(BarState.Off)
             .edgeEffect(EdgeEffect.Spring)
           }
@@ -425,57 +457,72 @@ struct StudyRoomPage {
   }
 
   @Builder
+  roomSwipeAction(r: Room) {
+    Row() {
+      Row() {
+        Text(r.role === 'owner' ? '解散' : '退出')
+          .fontSize(13).fontColor('#FFFFFF').fontWeight(FontWeight.Medium)
+      }
+      .width(72).height('100%')
+      .justifyContent(FlexAlign.Center)
+      .borderRadius(16)
+      .backgroundColor(this.t.tomato)
+      .onClick(() => {
+        if (r.role === 'owner') {
+          this.askDeleteRoom(r);
+        } else {
+          this.askLeaveRoom(r);
+        }
+      })
+    }
+    .height('100%')
+    .padding({ left: 10 })
+  }
+
+  @Builder
   roomCard(r: Room) {
     Column() {
       Row() {
-        Column() {
-          Row({ space: 6 }) {
-            Text(r.name)
-              .fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.t.ink)
-              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            if (r.role === 'owner') {
-              Text('房主').fontSize(10).fontColor(this.t.gold)
-                .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-                .borderRadius(99).backgroundColor(this.t.goldSoft)
-            }
-            if (r.need_password) {
-              Text('有密码').fontSize(10).fontColor(this.t.tomato)
-                .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-                .borderRadius(99).backgroundColor(this.t.tomatoSoft)
-            }
-          }
-          .width('100%')
-
-          Text('房间号 ' + r.id)
-            .fontSize(10.5).fontColor(this.t.ink3)
+        Row({ space: 6 }) {
+          Text(r.name)
+            .fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.t.ink)
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            .width('100%').margin({ top: 4 })
-
-          Text((r.member_count || 0) + ' 人 · ' + this.formatTime(r.created_at))
-            .fontSize(11).fontColor(this.t.ink3).margin({ top: 2 })
+          if (r.role === 'owner') {
+            Text('房主').fontSize(10).fontColor(this.t.gold)
+              .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+              .borderRadius(99).backgroundColor(this.t.goldSoft)
+          }
+          if (r.need_password) {
+            Text('有密码').fontSize(10).fontColor(this.t.tomato)
+              .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+              .borderRadius(99).backgroundColor(this.t.tomatoSoft)
+          }
         }
         .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
 
-        Row({ space: 10 }) {
-          Text('💬')
-            .fontSize(16)
-            .padding(4)
-            .onClick(() => { this.openBoard(r); })
-          if (r.role === 'owner') {
-            Text('✕')
-              .fontSize(14).fontColor(this.t.ink3)
-              .padding(4)
-              .onClick(() => { this.askDeleteRoom(r); })
-          } else {
-            Text('退出')
-              .fontSize(12).fontColor(this.t.tomato)
-              .padding(4)
-              .onClick(() => { this.askLeaveRoom(r); })
-          }
-        }
+        Text('💬')
+          .fontSize(16)
+          .padding({ left: 8 })
+          .onClick(() => { this.openBoard(r); })
       }
       .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      Row() {
+        Text('房间号 ' + r.id)
+          .fontSize(11).fontColor(this.t.ink3)
+          .layoutWeight(1)
+        Text('📋')
+          .fontSize(12).fontColor(this.t.leaf)
+          .padding({ left: 5, right: 5, top: 1, bottom: 1 })
+          .borderRadius(6).backgroundColor(this.t.leafSoft)
+      }
+      .width('100%').margin({ top: 6 })
+      .onClick(() => { this.copyRoomId(r.id); })
+
+      Text((r.member_count || 0) + ' 人 · ' + this.formatTime(r.created_at))
+        .fontSize(11).fontColor(this.t.ink3).margin({ top: 4 })
+        .width('100%')
 
       Row() {
         Text('开始自习')
@@ -486,7 +533,7 @@ struct StudyRoomPage {
           .onClick(() => { this.startFocus(r); })
       }
       .width('100%')
-      .margin({ top: 10 })
+      .margin({ top: 12 })
     }
     .width('100%')
     .padding(14)
@@ -568,7 +615,7 @@ struct StudyRoomPage {
       Column() {
         Text('加入自习室').fontFamily(FONT_DISPLAY).fontSize(17).fontColor(this.t.ink)
           .width('100%').margin({ bottom: 6 })
-        Text('输入好友分享的房间号（一串字符）')
+        Text('输入好友分享的房间号（6 位数字）')
           .fontSize(11.5).fontColor(this.t.ink3).width('100%').margin({ bottom: 14 })
 
         TextInput({ placeholder: '房间号', text: this.joinCode })
@@ -624,6 +671,16 @@ struct StudyRoomPage {
             Text(this.boardRoomName).fontSize(11.5).fontColor(this.t.ink3)
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               .margin({ top: 2 })
+            Row({ space: 6 }) {
+              Text('房间号 ' + this.boardRoomId)
+                .fontSize(11).fontColor(this.t.ink3)
+              Text('复制')
+                .fontSize(10).fontColor(this.t.leaf)
+                .padding({ left: 6, right: 6, top: 1, bottom: 1 })
+                .borderRadius(6).backgroundColor(this.t.leafSoft)
+            }
+            .margin({ top: 4 })
+            .onClick(() => { this.copyRoomId(this.boardRoomId); })
           }
           .alignItems(HorizontalAlign.Start)
           .layoutWeight(1)

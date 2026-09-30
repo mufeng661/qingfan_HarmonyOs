@@ -85,7 +85,7 @@ export class CloudRoomService {
     return r.data;
   }
 
-  // room.get 返回的 member_count 是准确的（listMine 的不准，恒为 1）
+  // 房间详情（含成员列表）；member_count 由后端 listMine/room.get 返回
   static async get(userId: string, roomId: string): Promise<Room> {
     const data: Record<string, Object> = {};
     data['roomId'] = roomId;
