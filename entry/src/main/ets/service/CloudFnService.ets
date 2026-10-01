@@ -4,7 +4,7 @@ import { CLOUD_FN_URL, CLOUD_PLATFORM } from '../model/CloudBase';
 // 云函数调用客户端：POST { action, userId, platform, ...data }
 // 与 Web / 小程序端同构（小程序 wx.cloud.callFunction、Web fetch fnUrl）。
 export class CloudFnService {
-  static async call(action: string, data: Record<string, Object>, userId: string): Promise<string> {
+  static async call(action: string, data: Record<string, Object>, userId: string, readTimeout: number = 15000): Promise<string> {
     const body: Record<string, Object> = {};
     body['action'] = action;
     body['userId'] = userId;
@@ -26,7 +26,7 @@ export class CloudFnService {
         header: header,
         extraData: JSON.stringify(body),
         connectTimeout: 10000,
-        readTimeout: 15000
+        readTimeout: readTimeout
       });
       if (res.responseCode !== 200) {
         throw new Error('HTTP ' + res.responseCode);

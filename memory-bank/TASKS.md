@@ -28,6 +28,8 @@
 - [x] B4 账号打通：登录/注册改走 `auth.login` / `auth.register`（与 Web/小程序同一套账号）
 - [x] B5 房间内计时：`Focus` 房间模式（标题=房间名、完成后询问是否继续）；房间成员弹窗
 - [x] B6 房间成员排行展示「专注时长」（本人本机累计；上报接口 `focus.record` 已预留）
+- [x] B7 接入真实 AI（B 方案）：云函数新增 `ai.chat` / `ai.insight`（OpenAI 兼容，密钥走云函数环境变量 `AI_BASE_URL`/`AI_API_KEY`/`AI_MODEL`）；前端新增 `CloudAiService`，`AIChat`/`Stats`/`Home` 接入并保留离线回退
+- [x] B8 AI 用量治理：`ai_usage_self` 表 + 云函数每人每日配额（`AI_DAILY_LIMIT`）+ 频率限制（`AI_MIN_INTERVAL_MS`），超限返回 `AI_QUOTA_EXCEEDED`/`AI_RATE_LIMIT`
 
 ## C. Web / 小程序端（功能与鸿蒙一致）
 

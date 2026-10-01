@@ -57,6 +57,8 @@ Preferences 库名 `qf_store`。**业务数据按账号隔离**：key = `基础k
 | `comment.add` | `{ roomId, nickname, content, parentId? }` | `Comment` |
 | `comment.like` | `{ roomId, id, action }` | `{ likes, liked }` |
 | `comment.delete` | `{ roomId, id }` | — |
+| `ai.chat` | `{ messages:[{role,content}], prompt?, context? }` | `{ reply }` |
+| `ai.insight` | `{ prompt?, context? }` | `{ reply }` |
 
 公共字段：请求体带 `action` / `userId` / `platform:'harmony'`，请求头 `x-user-id` / `x-user-platform`。
 
@@ -71,6 +73,7 @@ Comment    { id:number, project_id(=roomId), parent_id, root_id, reply_to_name, 
 - `rooms_self`：房间（`id` bigint 自增 PK / `room_no` varchar(32) 唯一（6 位房间号，对外即 `Room.id`）/ name / owner_id / password_hash / password_salt / is_deleted / created_at / updated_at）。**创建时由云函数生成唯一 `room_no` 写入**。
 - `room_members_self`：房间成员（`room_id` char(6)=房间号 / user_id / role / joined_at / updated_at / last_active_at）。
 - `comments_self`：留言（id/project_id(=房间号)/parent_id/root_id/nickname/content/role/likes/liked_by/created_at/updated_at）。
+- `ai_usage_self`：AI 用量（`user_id` + `usage_date`(北京时间 YYYY-MM-DD) 唯一 / `used` 当日次数 / `last_at` 上次调用毫秒）。**列名用 `used` 而非 `count`**（CloudBase rdb 会把 `count` 当聚合函数，不能与其他字段一起 select）。
 
 > 待办：如需「成员真实专注时长排行」，需在 `room_members_self` 增加 `focus_minutes`、`nickname`，并新增云函数 action `focus.record`、在 `room.get` 返回这两个字段。
 

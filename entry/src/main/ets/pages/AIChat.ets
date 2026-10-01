@@ -1,6 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
 import { themeOf, ThemeDef, FONT_DISPLAY } from '../model/Types';
+import { CloudAiService, AiMessage, AiError } from '../service/CloudAiService';
 
 interface Msg {
   role: 'me' | 'ai';
@@ -20,6 +21,7 @@ struct AIChat {
   @State messages: Msg[] = [];
   @State input: string = '';
   @State uiTick: number = 0;
+  @State aiBusy: boolean = false;
   private t: ThemeDef = themeOf(AppState.instance.themeKey);
   private scroller: Scroller = new Scroller();
 
@@ -46,29 +48,54 @@ struct AIChat {
     AppState.saveTasks();
   }
 
-  reply(userText: string, aiText: string, action: string) {
-    this.messages = [...this.messages, { role: 'me', text: userText, action: '' }];
-    this.uiTick += 1;
-    setTimeout(() => {
-      this.messages = [...this.messages, { role: 'ai', text: aiText, action: action }];
-      this.uiTick += 1;
-      setTimeout(() => {
-        this.scroller.scrollEdge(Edge.Bottom);
-      }, 50);
-    }, 400);
+  userId(): string {
+    return AppState.userKey();
   }
 
-  send(text: string) {
-    const t = text.trim();
-    if (!t) return;
+  scrollBottom() {
+    setTimeout(() => { this.scroller.scrollEdge(Edge.Bottom); }, 60);
+  }
+
+  toAiHistory(): AiMessage[] {
+    const out: AiMessage[] = [];
+    for (let i = 0; i < this.messages.length; i++) {
+      const m = this.messages[i];
+      out.push({ role: m.role === 'me' ? 'user' : 'assistant', content: m.text });
+    }
+    return out;
+  }
+
+  async ask(userText: string, action: string): Promise<void> {
+    const t = userText.trim();
+    if (!t || this.aiBusy) return;
     this.messages = [...this.messages, { role: 'me', text: t, action: '' }];
     this.input = '';
     this.uiTick += 1;
-    setTimeout(() => {
-      this.messages = [...this.messages, { role: 'ai', text: this.genericReply(t), action: '' }];
-      this.uiTick += 1;
-      setTimeout(() => { this.scroller.scrollEdge(Edge.Bottom); }, 50);
-    }, 500);
+    this.scrollBottom();
+    this.aiBusy = true;
+    let reply = '';
+    if (AppState.isLoggedIn()) {
+      try {
+        reply = await CloudAiService.chat(this.userId(), this.toAiHistory(), t);
+      } catch (e) {
+        if (e instanceof AiError && (e.code === 'AI_QUOTA_EXCEEDED' || e.code === 'AI_RATE_LIMIT')) {
+          reply = e.message;
+        } else {
+          reply = '';
+        }
+      }
+    }
+    if (!reply) {
+      reply = this.genericReply(t);
+    }
+    this.messages = [...this.messages, { role: 'ai', text: reply, action: action }];
+    this.aiBusy = false;
+    this.uiTick += 1;
+    this.scrollBottom();
+  }
+
+  send(text: string) {
+    this.ask(text, '');
   }
 
   genericReply(q: string): string {
@@ -122,6 +149,19 @@ struct AIChat {
           ForEach(this.messages, (m: Msg) => {
             this.bubble(m)
           }, (m: Msg, i: number) => i + '_' + m.role + '_' + this.uiTick)
+          if (this.aiBusy) {
+            Row({ space: 8 }) {
+              Column() {
+                Text('AI').fontFamily(FONT_DISPLAY).fontSize(11).fontColor('#FFFFFF')
+              }
+              .width(26).height(26).borderRadius(8)
+              .backgroundColor(this.t.leaf)
+              .justifyContent(FlexAlign.Center)
+              Text('正在思考…').fontSize(12.5).fontColor(this.t.ink3)
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.Start)
+          }
           Column().height(4)
         }
         .width('100%')
@@ -207,13 +247,13 @@ struct AIChat {
   onSuggestion(s: Sugg) {
     if (s.title === '给待办排个序') {
       this.aiSort();
-      this.reply('帮我给待办排个序', '已按「困难 → 中等 → 简单」帮你重新排序，把最费脑的放在精力最旺的时候先完成。', '已执行排序');
+      this.ask('帮我给待办排个序，并说明这样排的理由', '已执行排序');
     } else if (s.title === '最佳专注时段') {
-      this.reply('我今天几点专注最高效？', '你的高效时段是 14:00–16:00 和 20:00–21:30。建议把「写周报」这类硬骨头排在下午，晚上留给轻量阅读。', '');
+      this.ask('我今天几点专注最高效？', '');
     } else if (s.title === '本周专注洞察') {
-      this.reply('看看我这周的洞察', '本周专注 12 小时 05 分，较上周 +18%。深度专注占比 64%，被打断 3 次，主要原因是「消息通知」。', '');
+      this.ask('看看我这周的专注洞察', '');
     } else {
-      this.reply('给我点改进建议', '建议 1：专注时开启免打扰，减少打断；建议 2：连续 4 个番茄后安排 15 分钟长休息；建议 3：把背单词挪到早晨 08:30，那时打断率最低。', '');
+      this.ask('给我点改进建议', '');
     }
   }
 

@@ -3,6 +3,7 @@ import { AppState } from '../model/AppState';
 import { themeOf, ThemeDef, FONT_DISPLAY, FocusRecord, DailyStats } from '../model/Types';
 import { todayKey, pad2, formatHM } from '../model/Store';
 import { TabBar } from '../components/TabBar';
+import { CloudAiService } from '../service/CloudAiService';
 
 type RangeKey = 'day' | 'week' | 'month';
 
@@ -22,14 +23,29 @@ struct Stats {
   @State pomoText: string = '';
   @State rateText: string = '';
   @State rows: TimeLineRow[] = [];
+  @State aiText: string = '';
+  @State aiLoading: boolean = false;
   private t: ThemeDef = themeOf(AppState.instance.themeKey);
 
   aboutToAppear() {
     this.refresh();
+    this.loadAi();
   }
 
   onPageShow() {
     this.refresh();
+  }
+
+  async loadAi(): Promise<void> {
+    if (!AppState.isLoggedIn() || this.aiLoading) return;
+    this.aiLoading = true;
+    try {
+      this.aiText = await CloudAiService.insight(AppState.userKey(), '');
+    } catch (e) {
+      this.aiText = '';
+    } finally {
+      this.aiLoading = false;
+    }
   }
 
   onRefresh() {
@@ -160,12 +176,19 @@ struct Stats {
       .width('100%')
       .margin({ bottom: 10 })
 
-      Column({ space: 8 }) {
-        this.insight('专注总时长较上周 ', '提升 18%', '，坚持得很好。', this.t.leafDeep)
-        this.insight('你的「深度专注」高峰在 ', '14:00–16:00', '，建议保留。', this.t.tomato)
-        this.insight('早晨 08:30 的专注被打断率最低，适合安排阅读类任务。', '', '', this.t.ink)
+      if (this.aiText.length > 0) {
+        Text(this.aiText)
+          .fontSize(12.5).lineHeight(21).fontColor(this.t.ink).width('100%')
+      } else if (this.aiLoading) {
+        Text('AI 正在分析你的专注数据…')
+          .fontSize(12.5).lineHeight(21).fontColor(this.t.ink3).width('100%')
+      } else if (!AppState.isLoggedIn()) {
+        Text('登录后解锁 AI 专注洞察报告')
+          .fontSize(12.5).lineHeight(21).fontColor(this.t.ink2).width('100%')
+      } else {
+        Text('专注时开启免打扰、每 4 个番茄安排 15 分钟长休息，能有效减少打断。')
+          .fontSize(12.5).lineHeight(21).fontColor(this.t.ink2).width('100%')
       }
-      .width('100%')
     }
     .width('100%')
     .padding({ left: 18, right: 18, top: 16, bottom: 16 })

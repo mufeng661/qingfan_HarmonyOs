@@ -27,3 +27,6 @@ entry/src/main/ets/model/CloudConfig.ets
 
 # 云函数依赖（部署时云端安装，不入库）
 cloudfunctions/**/node_modules
+
+# 本地云函数部署配置（含 AI 密钥，不入库）
+/cloudbaserc.json

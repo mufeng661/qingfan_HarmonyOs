@@ -4,6 +4,7 @@ import { AppState } from '../model/AppState';
 import { themeOf, TaskItem, ThemeDef, FONT_DISPLAY } from '../model/Types';
 import { Store, greet, genId, todayKey } from '../model/Store';
 import { TabBar } from '../components/TabBar';
+import { CloudAiService } from '../service/CloudAiService';
 
 interface GuideStep {
   icon: string;
@@ -39,6 +40,7 @@ struct Home {
   @State pendingDeleteId: string = '';
   @State pendingDeleteTitle: string = '';
   @State tasks: TaskItem[] = [];
+  @State aiTip: string = '';
   private t: ThemeDef = themeOf(AppState.instance.themeKey);
   private todayFocusedMin: number = 0;
   private todayFinished: number = 0;
@@ -67,6 +69,7 @@ struct Home {
     this.refreshTasks();
     this.syncUserState();
     this.checkGuide();
+    this.loadAiTip();
     this.midnightTimerId = setInterval(() => {
       const k = todayKey();
       if (k !== this.lastDayKey) {
@@ -103,6 +106,18 @@ struct Home {
       this.refreshing = false;
       this.toast('已刷新');
     }, 600);
+  }
+
+  async loadAiTip(): Promise<void> {
+    if (!AppState.isLoggedIn() || this.aiTip.length > 0) return;
+    try {
+      this.aiTip = await CloudAiService.insight(
+        AppState.userKey(),
+        '用一句话（40 字内）给我今天最有用的一条专注建议，不要列点。'
+      );
+    } catch (e) {
+      this.aiTip = '';
+    }
   }
 
   syncUserState() {
@@ -548,16 +563,25 @@ struct Home {
       .justifyContent(FlexAlign.Center)
 
       if (AppState.isLoggedIn()) {
-        Text() {
-          Span('你下午 ')
-          Span('14:00–16:00').fontColor(this.t.leafDeep).fontWeight(FontWeight.Medium)
-          Span(' 专注效率最高，建议把「写周报」排在这个时段，预计 2 个番茄完成。')
+        if (this.aiTip.length > 0) {
+          Text(this.aiTip)
+            .fontSize(12.5)
+            .fontColor(this.t.ink)
+            .lineHeight(20)
+            .layoutWeight(1)
+            .margin({ left: 10 })
+        } else {
+          Text() {
+            Span('今天先挑一件最要紧的事，用 ')
+            Span('1 个番茄').fontColor(this.t.leafDeep).fontWeight(FontWeight.Medium)
+            Span(' 起步，专注时开启免打扰。')
+          }
+          .fontSize(12.5)
+          .fontColor(this.t.ink)
+          .lineHeight(20)
+          .layoutWeight(1)
+          .margin({ left: 10 })
         }
-        .fontSize(12.5)
-        .fontColor(this.t.ink)
-        .lineHeight(20)
-        .layoutWeight(1)
-        .margin({ left: 10 })
       } else {
         Text('登录后解锁 AI 助手')
           .fontSize(12.5)

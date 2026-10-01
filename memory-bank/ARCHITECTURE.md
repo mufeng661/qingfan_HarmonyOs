@@ -31,10 +31,11 @@ widget/      桌面卡片（FormExtensionAbility + ArkUI 渲染）
   - `AppState.loadAll()`：App 启动时调用（引导标记、用户、主题、账号、业务数据、房间种子）。
   - `AppState.loadBusinessData()`：**登录/注册成功后**调用，按当前账号重新加载业务数据。
 - **本地优先**：待办/专注统计/成长数据均本地存储；退出登录只清内存、不清账号数据。
-- **云端**：账号、自习室房间、房间留言走云函数（三端共享）。
+- **云端**：账号、自习室房间、房间留言走云函数（三端共享）；**AI 对话/洞察**走云函数 `ai.chat` / `ai.insight`（云函数内调第三方大模型，客户端 `CloudAiService` 只发上下文，不持有密钥）。
 
 ```
-UI(page) ──调用──▶ service ──HTTP──▶ CloudBase 云函数 studyRoomFunctions ──▶ MySQL
+UI(page) ──调用──▶ service ──HTTP──▶ CloudBase 云函数 studyRoomFunctions ──▶ MySQL / 第三方大模型
+   ▲                                    (auth / room / comment / ai)
    ▲                                                                          
    └── 读写 ──▶ AppState(内存) ──▶ Store(Preferences，按账号隔离)
 ```

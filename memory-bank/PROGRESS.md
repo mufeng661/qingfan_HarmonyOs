@@ -46,6 +46,14 @@
 - 自习室房间号支持复制：房间卡片与留言弹窗均加复制入口（`@kit.BasicServicesKit` 剪贴板 + Toast）；创建成功后自动复制房间号；加入弹窗文案改为「6 位数字」。
 - 自习室房间卡片重排：文字（房间名/房间号/人数/开始自习）左对齐、图标（💬 标题行右、📋 房间号行右）右对齐；删除/退出由卡片按钮改为**列表左滑**（`List + ListItem.swipeAction`，露出「解散 / 退出」后走二次确认弹窗）。
 
+### 2026-10-01
+
+- **AI 接入真实大模型（B 方案）**：云函数新增 `ai.chat` / `ai.insight`（`ai.js`，OpenAI 兼容 `/chat/completions`，Node 内置 `https`；密钥只存云函数环境变量 `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL`，客户端零密钥）。
+- 前端新增 `service/CloudAiService.ets`（组装真实上下文：昵称/今日专注/番茄/连续/打断原因/待办），`CloudFnService.call` 支持自定义 `readTimeout`（AI 用 60s）。
+- `AIChat`（对话 + 建议卡）、`Stats`（AI 洞察）、`Home`（AI 建议卡）接入真实模型，**未登录或调用失败时回退本地文案**；删除原先写死的假洞察/假建议。
+- 已在云函数配置 AI 环境变量（DeepSeek：`AI_BASE_URL`/`AI_MODEL=deepseek-chat`/`AI_API_KEY`/`AI_TIMEOUT_MS`）、函数超时提到 **60s** 并部署；联调通过：`ai.chat` 与 `ai.insight` 均返回真实模型回复（含用户数据上下文），未登录返回 `NO_USER`。
+- **AI 用量治理**：新增 `ai_usage_self` 表（`user_id`+北京时间日期唯一，列名 `used` 避开 rdb 的 `count` 聚合冲突），云函数 `ai.js` 加**每人每日配额**（`AI_DAILY_LIMIT`，默认 50）+ **频率限制**（`AI_MIN_INTERVAL_MS`，默认 8s），超限返回 `AI_QUOTA_EXCEEDED` / `AI_RATE_LIMIT`；前端 `AIChat` 直接提示，`Stats`/`Home` 静默回退。DB 异常 fail-open。已部署并实测通过。
+
 ### Web / 小程序端（`qingfan(web)` 及同构小程序）
 
 - **功能与鸿蒙端一致**：引导、登录注册、今日待办、专注计时、成长（我的）、统计、自习室、主题、AI 助手。

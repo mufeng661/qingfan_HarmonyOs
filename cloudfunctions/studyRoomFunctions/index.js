@@ -2,6 +2,7 @@ const { db } = require("./cloudbase");
 const { hashPassword, verifyPassword } = require("./password");
 const { verifyToken } = require("./token");
 const auth = require("./auth");
+const ai = require("./ai");
 const { now, ok, fail, toPositiveInt, isValidRoomId, resolveRole, roleAdmin } = require("./utils");
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -536,6 +537,8 @@ const handlers = {
   "comment.add": commentAdd,
   "comment.delete": commentDelete,
   "comment.like": commentLike,
+  "ai.chat": ai.aiChat,
+  "ai.insight": ai.aiInsight,
 };
 
 function parseHttpEvent(event) {

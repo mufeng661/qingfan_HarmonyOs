@@ -49,6 +49,21 @@ entry/src/main/ets/
 | 账号 | `auth.register` / `auth.login` | 用户名+手机号+密码注册 / 手机号+密码登录，返回 `{ token, user }` |
 | 房间 | `room.create` / `room.listMine` / `room.get` / `room.join` / `room.leave` / `room.delete` | 创建 / 我的房间 / 房间详情(含成员) / 加入 / 退出 / 解散 |
 | 留言 | `comment.list` / `comment.add` / `comment.like` / `comment.delete` | 列表 / 发表(支持 parentId 回复) / 点赞 / 删除 |
+| AI | `ai.chat` / `ai.insight` | 对话 / 专注洞察（云函数内调第三方大模型，返回 `{ reply }`） |
+
+### 6.1 真实 AI 接入（B 方案）
+
+- 客户端不持有任何密钥：真实大模型调用在**云函数** `studyRoomFunctions` 内完成，走 **OpenAI 兼容** `/chat/completions`（`ai.js`，Node 内置 `https`）。
+- 云函数环境变量（部署时配置）：
+  - `AI_BASE_URL`：如 `https://api.deepseek.com/v1`
+  - `AI_API_KEY`：服务商 API Key
+  - `AI_MODEL`：如 `deepseek-chat`
+  - `AI_TIMEOUT_MS`（可选，默认 45000）
+  - `AI_DAILY_LIMIT`：每人每天最大 AI 调用次数（默认 50）
+  - `AI_MIN_INTERVAL_MS`：两次调用最小间隔毫秒（默认 8000）
+- **按用户限流**：云函数用 `ai_usage_self` 表（`user_id`+北京时间日期唯一）做**每日配额 + 频率限制**，超限返回 `AI_QUOTA_EXCEEDED` / `AI_RATE_LIMIT`（前端在对话里提示）。DB 异常时 fail-open（放行），不拖垮 AI。
+- 函数超时需 ≥ 60s（AI 响应慢）；`CloudFnService.call` 对 AI 请求使用 `readTimeout=60000`。
+- 客户端 `CloudAiService` 组装真实用户上下文（昵称/今日专注/番茄/连续天数/打断原因/待办）随请求下发，系统提示词在云端拼装；AI 不可用或未登录时前端回退本地文案。
 
 ## 7. 桌面卡片
 
