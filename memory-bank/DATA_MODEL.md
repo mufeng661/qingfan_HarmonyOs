@@ -57,7 +57,7 @@ Preferences 库名 `qf_store`。**业务数据按账号隔离**：key = `基础k
 | `comment.add` | `{ roomId, nickname, content, parentId? }` | `Comment` |
 | `comment.like` | `{ roomId, id, action }` | `{ likes, liked }` |
 | `comment.delete` | `{ roomId, id }` | — |
-| `ai.chat` | `{ messages:[{role,content}], prompt?, context? }` | `{ reply }` |
+| `ai.chat` | `{ messages:[{role,content}], prompt?, context?, wantPlan? }` | `{ reply, todos?: AiTodo[] }` |
 | `ai.insight` | `{ prompt?, context? }` | `{ reply }` |
 
 公共字段：请求体带 `action` / `userId` / `platform:'harmony'`，请求头 `x-user-id` / `x-user-platform`。
@@ -66,6 +66,7 @@ Preferences 库名 `qf_store`。**业务数据按账号隔离**：key = `基础k
 Room       { id:string(6 位房间号), name, owner_id, need_password, created_at, updated_at, role:'owner'|'member', member_count, members?: RoomMember[] }
 RoomMember { user_id, role, joined_at, nickname?, focus_minutes? }   // 后两者为「待后端支持」的可选字段
 Comment    { id:number, project_id(=roomId), parent_id, root_id, reply_to_name, nickname, content, role, likes, liked, can_delete, created_at }
+AiTodo     { title:string, durationMin:number, difficulty:'easy'|'medium'|'hard' }   // ai.chat 的 wantPlan=true 时返回，前端自动加入待办
 ```
 
 ### 3.2 云表（MySQL）

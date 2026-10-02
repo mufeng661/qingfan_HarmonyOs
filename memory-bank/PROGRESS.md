@@ -53,6 +53,8 @@
 - `AIChat`（对话 + 建议卡）、`Stats`（AI 洞察）、`Home`（AI 建议卡）接入真实模型，**未登录或调用失败时回退本地文案**；删除原先写死的假洞察/假建议。
 - 已在云函数配置 AI 环境变量（DeepSeek：`AI_BASE_URL`/`AI_MODEL=deepseek-chat`/`AI_API_KEY`/`AI_TIMEOUT_MS`）、函数超时提到 **60s** 并部署；联调通过：`ai.chat` 与 `ai.insight` 均返回真实模型回复（含用户数据上下文），未登录返回 `NO_USER`。
 - **AI 用量治理**：新增 `ai_usage_self` 表（`user_id`+北京时间日期唯一，列名 `used` 避开 rdb 的 `count` 聚合冲突），云函数 `ai.js` 加**每人每日配额**（`AI_DAILY_LIMIT`，默认 50）+ **频率限制**（`AI_MIN_INTERVAL_MS`，默认 8s），超限返回 `AI_QUOTA_EXCEEDED` / `AI_RATE_LIMIT`；前端 `AIChat` 直接提示，`Stats`/`Home` 静默回退。DB 异常 fail-open。已部署并实测通过。
+- **AI 聊天记录**：`AIChat` 对话（问 + 答）本地持久化（`Store`，按账号 `qf_ai_chat_<userKey>`，保留最近 200 条），进入页面自动恢复；顶栏「🗑」可一键**清空记录**（`promptAction.showDialog` 二次确认）。
+- **AI 计划 → 待办联动**：`ai.chat` 支持 `wantPlan`（用户消息含「计划/规划/安排/清单/制定」等触发），云函数要求模型在回复末尾输出 ```json``` 计划块并解析为 `todos`（title/durationMin/difficulty）；`AIChat` 收到后**自动写入待办列表**并提示「已添加 N 个待办」，建议卡新增「制定今日计划」。
 
 ### Web / 小程序端（`qingfan(web)` 及同构小程序）
 

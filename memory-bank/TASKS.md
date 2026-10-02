@@ -30,6 +30,7 @@
 - [x] B6 房间成员排行展示「专注时长」（本人本机累计；上报接口 `focus.record` 已预留）
 - [x] B7 接入真实 AI（B 方案）：云函数新增 `ai.chat` / `ai.insight`（OpenAI 兼容，密钥走云函数环境变量 `AI_BASE_URL`/`AI_API_KEY`/`AI_MODEL`）；前端新增 `CloudAiService`，`AIChat`/`Stats`/`Home` 接入并保留离线回退
 - [x] B8 AI 用量治理：`ai_usage_self` 表 + 云函数每人每日配额（`AI_DAILY_LIMIT`）+ 频率限制（`AI_MIN_INTERVAL_MS`），超限返回 `AI_QUOTA_EXCEEDED`/`AI_RATE_LIMIT`
+- [x] B9 AI 计划联动待办：`ai.chat` 支持 `wantPlan` 返回结构化 `todos`；`AIChat` 自动写入待办列表；聊天记录本地持久化 + 一键清空
 
 ## C. Web / 小程序端（功能与鸿蒙一致）
 

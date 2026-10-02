@@ -101,6 +101,14 @@ const SYSTEM_PROMPT = [
   "当用户数据不足时，明确说明并给出通用的番茄工作法建议。",
 ].join("");
 
+// 仅当用户明确要求制定计划时附加，要求模型在末尾输出结构化待办 JSON
+const PLAN_INSTRUCTION = [
+  "\n\n【重要】用户正在请求制定计划/安排待办。请在正常回复的最后，追加一个 JSON 代码块（用 ```json 包裹），格式：",
+  '{"todos":[{"title":"任务标题","durationMin":25,"difficulty":"easy|medium|hard"}]}',
+  "要求：2-6 条、具体可执行的小任务；durationMin 取 15/25/45/60 之一。除该代码块外不要再输出其它 JSON。",
+].join("");
+
+
 function contextText(context) {
   if (!context) return "";
   let obj = context;
@@ -136,7 +144,9 @@ function contextText(context) {
 }
 
 function buildMessages(params) {
-  const messages = [{ role: "system", content: SYSTEM_PROMPT + contextText(params.context) }];
+  const plan = params.wantPlan === true || params.wantPlan === "true";
+  const system = SYSTEM_PROMPT + (plan ? PLAN_INSTRUCTION : "") + contextText(params.context);
+  const messages = [{ role: "system", content: system }];
   const history = Array.isArray(params.messages) ? params.messages : [];
   history.slice(-MAX_HISTORY).forEach((m) => {
     if (!m || typeof m.content !== "string") return;
@@ -149,6 +159,33 @@ function buildMessages(params) {
     if (prompt) messages.push({ role: "user", content: prompt.slice(0, MAX_CONTENT) });
   }
   return messages;
+}
+
+// 从模型回复中提取 ```json {...} ``` 计划块，返回 { reply, todos }
+function extractPlan(text) {
+  const src = String(text || "");
+  const m = src.match(/```json\s*([\s\S]*?)```/i);
+  if (!m) return { reply: src.trim(), todos: [] };
+  let parsed = null;
+  try {
+    parsed = JSON.parse(m[1]);
+  } catch (error) {
+    parsed = null;
+  }
+  const reply = src.replace(m[0], "").trim();
+  const todos = [];
+  if (parsed && Array.isArray(parsed.todos)) {
+    parsed.todos.slice(0, 8).forEach((t) => {
+      if (!t) return;
+      const title = String(t.title || "").trim().slice(0, 60);
+      if (!title) return;
+      let dur = parseInt(t.durationMin, 10);
+      if (!Number.isFinite(dur) || dur < 1 || dur > 600) dur = 25;
+      const diff = t.difficulty === "easy" || t.difficulty === "hard" ? t.difficulty : "medium";
+      todos.push({ title, durationMin: dur, difficulty: diff });
+    });
+  }
+  return { reply: reply || src.trim(), todos };
 }
 
 // ===== 按用户每日配额 + 频率限制（服务端权威） =====
@@ -237,7 +274,8 @@ async function aiChat(params, ctx) {
   if (!gate.ok) return fail(gate.message, gate.code);
   try {
     const reply = await chat(messages);
-    return ok({ reply });
+    const parsed = extractPlan(reply);
+    return ok({ reply: parsed.reply, todos: parsed.todos });
   } catch (error) {
     console.error("[studyRoomFunctions] ai.chat error:", error.message);
     return fail("AI 暂时不可用：" + (error.message || "请稍后重试"), "AI_ERROR");

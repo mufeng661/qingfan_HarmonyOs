@@ -1,7 +1,9 @@
 import { router } from '@kit.ArkUI';
+import { promptAction } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
-import { themeOf, ThemeDef, FONT_DISPLAY } from '../model/Types';
-import { CloudAiService, AiMessage, AiError } from '../service/CloudAiService';
+import { themeOf, ThemeDef, FONT_DISPLAY, TaskItem } from '../model/Types';
+import { Store, genId } from '../model/Store';
+import { CloudAiService, AiMessage, AiError, AiTodo } from '../service/CloudAiService';
 
 interface Msg {
   role: 'me' | 'ai';
@@ -26,9 +28,53 @@ struct AIChat {
   private scroller: Scroller = new Scroller();
 
   aboutToAppear() {
-    this.messages = [
-      { role: 'ai', text: '嗨，小满。我是青番 AI，可以帮你排待办、看专注规律，还能给改进建议。想先试哪个？', action: '' }
-    ];
+    this.loadChat();
+  }
+
+  chatKey(): string {
+    return 'qf_ai_chat_' + AppState.userKey();
+  }
+
+  greeting(): Msg {
+    return {
+      role: 'ai',
+      text: '嗨，' + this.shortName() + '。我是青番 AI，可以帮你排待办、看专注规律，还能给改进建议。想先试哪个？',
+      action: ''
+    };
+  }
+
+  async loadChat(): Promise<void> {
+    const saved = await Store.getArr<Msg>(this.chatKey());
+    this.messages = saved.length > 0 ? saved : [this.greeting()];
+    this.uiTick += 1;
+    this.scrollBottom();
+  }
+
+  saveChat(): void {
+    const keep: Msg[] = this.messages.length > 200
+      ? this.messages.slice(this.messages.length - 200)
+      : this.messages;
+    Store.setArr(this.chatKey(), keep);
+  }
+
+  async clearHistory(): Promise<void> {
+    try {
+      const res = await promptAction.showDialog({
+        title: '清空聊天记录',
+        message: '删除后无法恢复，确定要清空吗？',
+        buttons: [
+          { text: '取消', color: '#8A8A8A' },
+          { text: '清空', color: '#D9534F' }
+        ]
+      });
+      if (res.index === 1) {
+        this.messages = [this.greeting()];
+        this.uiTick += 1;
+        this.saveChat();
+        promptAction.showToast({ message: '已清空聊天记录', duration: 1500 });
+      }
+    } catch (e) {
+    }
   }
 
   shortName(): string {
@@ -65,18 +111,24 @@ struct AIChat {
     return out;
   }
 
-  async ask(userText: string, action: string): Promise<void> {
+  async ask(userText: string, action: string, wantPlan: boolean): Promise<void> {
     const t = userText.trim();
     if (!t || this.aiBusy) return;
     this.messages = [...this.messages, { role: 'me', text: t, action: '' }];
     this.input = '';
     this.uiTick += 1;
     this.scrollBottom();
+    this.saveChat();
     this.aiBusy = true;
     let reply = '';
+    let added = 0;
     if (AppState.isLoggedIn()) {
       try {
-        reply = await CloudAiService.chat(this.userId(), this.toAiHistory(), t);
+        const res = await CloudAiService.chat(this.userId(), this.toAiHistory(), t, wantPlan);
+        reply = res.reply;
+        if (res.todos.length > 0) {
+          added = this.addPlanTodos(res.todos);
+        }
       } catch (e) {
         if (e instanceof AiError && (e.code === 'AI_QUOTA_EXCEEDED' || e.code === 'AI_RATE_LIMIT')) {
           reply = e.message;
@@ -88,14 +140,52 @@ struct AIChat {
     if (!reply) {
       reply = this.genericReply(t);
     }
+    if (added > 0) {
+      action = '已添加 ' + added + ' 个待办';
+      promptAction.showToast({ message: '已添加 ' + added + ' 个待办', duration: 1500 });
+    }
     this.messages = [...this.messages, { role: 'ai', text: reply, action: action }];
     this.aiBusy = false;
     this.uiTick += 1;
     this.scrollBottom();
+    this.saveChat();
   }
 
   send(text: string) {
-    this.ask(text, '');
+    this.ask(text, '', this.looksLikePlan(text));
+  }
+
+  looksLikePlan(text: string): boolean {
+    if (text.indexOf('排序') >= 0 || text.indexOf('排个序') >= 0) return false;
+    const k: string[] = ['计划', '规划', '安排', '清单', '制定', '排期'];
+    for (let i = 0; i < k.length; i++) {
+      if (text.indexOf(k[i]) >= 0) return true;
+    }
+    return false;
+  }
+
+  addPlanTodos(todos: AiTodo[]): number {
+    if (todos.length === 0) return 0;
+    const base = AppState.instance.tasks.length;
+    const items: TaskItem[] = [];
+    for (let i = 0; i < todos.length; i++) {
+      const t = todos[i];
+      const diff: 'easy' | 'medium' | 'hard' =
+        t.difficulty === 'easy' ? 'easy' : (t.difficulty === 'hard' ? 'hard' : 'medium');
+      items.push({
+        id: genId('t'),
+        title: t.title,
+        durationMin: t.durationMin,
+        status: 'todo',
+        difficulty: diff,
+        order: base + i,
+        createdAt: Date.now(),
+        bgSeed: 'sky'
+      });
+    }
+    AppState.instance.tasks = [...AppState.instance.tasks, ...items];
+    AppState.saveTasks();
+    return items.length;
   }
 
   genericReply(q: string): string {
@@ -137,6 +227,11 @@ struct AIChat {
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
+
+        Text('🗑')
+          .fontSize(17).fontColor(this.t.ink3)
+          .padding({ left: 8, top: 4, bottom: 4 })
+          .onClick(() => { this.clearHistory(); })
       }
       .width('100%')
       .padding({ left: 16, right: 16, top: 14, bottom: 14 })
@@ -238,6 +333,7 @@ struct AIChat {
   suggestions(): Sugg[] {
     return [
       { icon: '✨', title: '给待办排个序', desc: '按难易程度自动安排优先级' },
+      { icon: '📝', title: '制定今日计划', desc: 'AI 生成计划并自动加入待办' },
       { icon: '⏰', title: '最佳专注时段', desc: '看看我什么时间效率最高' },
       { icon: '📈', title: '本周专注洞察', desc: '生成我的专注报告' },
       { icon: '🔥', title: '给我点改进建议', desc: '针对我的习惯个性化建议' }
@@ -247,13 +343,15 @@ struct AIChat {
   onSuggestion(s: Sugg) {
     if (s.title === '给待办排个序') {
       this.aiSort();
-      this.ask('帮我给待办排个序，并说明这样排的理由', '已执行排序');
+      this.ask('帮我给待办排个序，并说明这样排的理由', '已执行排序', false);
     } else if (s.title === '最佳专注时段') {
-      this.ask('我今天几点专注最高效？', '');
+      this.ask('我今天几点专注最高效？', '', false);
     } else if (s.title === '本周专注洞察') {
-      this.ask('看看我这周的专注洞察', '');
+      this.ask('看看我这周的专注洞察', '', false);
+    } else if (s.title === '制定今日计划') {
+      this.ask('帮我制定今天的专注计划', '', true);
     } else {
-      this.ask('给我点改进建议', '');
+      this.ask('给我点改进建议', '', false);
     }
   }
 

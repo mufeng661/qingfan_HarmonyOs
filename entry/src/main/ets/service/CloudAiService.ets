@@ -7,6 +7,17 @@ export interface AiMessage {
   content: string;
 }
 
+export interface AiTodo {
+  title: string;
+  durationMin: number;
+  difficulty: string;
+}
+
+export interface AiChatResult {
+  reply: string;
+  todos: AiTodo[];
+}
+
 interface AiTaskBrief {
   title: string;
   status: string;
@@ -29,6 +40,7 @@ interface FnError {
 
 interface AiChatData {
   reply: string;
+  todos?: AiTodo[];
 }
 
 interface AiChatResp {
@@ -80,17 +92,20 @@ export class CloudAiService {
     return JSON.stringify(ctx);
   }
 
-  static async chat(userId: string, history: AiMessage[], prompt: string): Promise<string> {
+  static async chat(userId: string, history: AiMessage[], prompt: string, wantPlan: boolean): Promise<AiChatResult> {
     const data: Record<string, Object> = {};
     data['messages'] = history;
     data['prompt'] = prompt;
+    data['wantPlan'] = wantPlan ? 'true' : 'false';
     data['context'] = CloudAiService.buildContextJson();
     const text = await CloudFnService.call('ai.chat', data, userId, 60000);
     const r = JSON.parse(text) as AiChatResp;
     if (!r.success) {
       throw new AiError(r.error?.code ?? 'ERROR', errMsg(r.error));
     }
-    return r.data.reply;
+    const todos: AiTodo[] = r.data.todos ?? [];
+    const result: AiChatResult = { reply: r.data.reply, todos: todos };
+    return result;
   }
 
   static async insight(userId: string, prompt: string): Promise<string> {
