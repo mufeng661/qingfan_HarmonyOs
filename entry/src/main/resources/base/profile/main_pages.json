@@ -8,6 +8,7 @@
     "pages/Focus",
     "pages/Complete",
     "pages/Stats",
+    "pages/DataStats",
     "pages/Rank",
     "pages/StudyRoom",
     "pages/StudyRoomFocus",

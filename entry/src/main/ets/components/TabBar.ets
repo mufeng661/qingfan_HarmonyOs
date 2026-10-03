@@ -13,7 +13,8 @@ export interface TabSpec {
 export const TABS: TabSpec[] = [
   { id: 'home', label: '今日', icon: '🌿', url: 'pages/Home' },
   { id: 'study', label: '自习室', icon: '👥', url: 'pages/StudyRoom' },
-  { id: 'stats', label: '统计', icon: '📊', url: 'pages/Stats' },
+  { id: 'timeline', label: '时间轴', icon: '🕒', url: 'pages/Stats' },
+  { id: 'data', label: '数据', icon: '📊', url: 'pages/DataStats' },
   { id: 'me', label: '我的', icon: '👤', url: 'pages/Me' }
 ];
 
@@ -39,7 +40,7 @@ export struct TabBar {
           if (this.active === t.id) {
             return;
           }
-          if (t.id === 'stats') {
+          if (t.id === 'timeline' || t.id === 'data') {
             if (!AppState.isLoggedIn()) {
               promptAction.showToast({ message: '登录后即可使用，请到「我的」登录', duration: 1800 });
               router.replaceUrl({ url: 'pages/Me' });

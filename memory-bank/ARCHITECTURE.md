@@ -18,8 +18,8 @@ widget/      桌面卡片（FormExtensionAbility + ArkUI 渲染）
 
 - 启动：`EntryAbility` → `pages/Index`。
 - `Index`：`!onboarded` → `Onboarding`；否则 → `Home`（不再强制登录）。
-- 底部导航 `TabBar`（`components/TabBar.ets`）：今日 / 自习室 / 统计 / 我的，用 `router.replaceUrl` 切换。
-  - 未登录点「统计 / 自习室」→ 提示并跳「我的」。
+- 底部导航 `TabBar`（`components/TabBar.ets`）：今日 / 自习室 / 时间轴 / 数据 / 我的，用 `router.replaceUrl` 切换。
+  - 未登录点「时间轴 / 数据 / 自习室」→ 提示并跳「我的」。
 - 页面跳转：`router.pushUrl`（详情类）/ `replaceUrl`（Tab 与完成页）/ `back`（返回）。
 - 登录页从「我的」`pushUrl` 进入，登录成功 `router.back()` 返回。
 
@@ -48,7 +48,7 @@ UI(page) ──调用──▶ service ──HTTP──▶ CloudBase 云函数 s
 | 专注计时（待办模式） | ✅ | ✅ |
 | 签到 / 成长体系 | ❌（提示登录） | ✅ |
 | AI 助手 / AI 对话 | ❌（提示登录） | ✅ |
-| 统计 | ❌ | ✅ |
+| 时间轴 / 数据 | ❌ | ✅ |
 | 自习室（房间/留言/房间计时） | ❌ | ✅ |
 
 判断：`AppState.isLoggedIn()`（`user.phone !== ''`）。云函数用的稳定标识：`AppState.userKey()`（登录=手机号，游客=`harmony-guest`）。

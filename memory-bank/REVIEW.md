@@ -1,5 +1,5 @@
 # 青番 · 评审（REVIEW）
-
+[build](../entry/build)
 > 评审对象：当前 `qingfan` 鸿蒙工程代码。参照 `PRD / DESIGN / DATA_MODEL / ARCHITECTURE`。
 
 ## 1. 结论
