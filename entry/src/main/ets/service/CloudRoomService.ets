@@ -6,6 +6,10 @@ export interface RoomMember {
   joined_at: number;
   nickname?: string;
   focus_minutes?: number;
+  today_minutes?: number;
+  streak_days?: number;
+  total_days?: number;
+  focusing?: number;
 }
 
 export interface Room {
@@ -17,11 +21,17 @@ export interface Room {
   updated_at: number;
   role: string;
   member_count: number;
+  join_code?: string;
+  daily_min?: number;
+  my_focus_minutes?: number;
+  my_today_minutes?: number;
   members?: RoomMember[];
 }
 
 interface FnError {
+  code?: string;
   message: string;
+  roomId?: string;
 }
 
 interface RoomResp {
@@ -61,10 +71,11 @@ export class CloudRoomService {
     return r.data.list ? r.data.list : [];
   }
 
-  static async create(userId: string, name: string, password: string): Promise<Room> {
+  static async create(userId: string, name: string, password: string, dailyMin: number): Promise<Room> {
     const data: Record<string, Object> = {};
     data['name'] = name;
     data['password'] = password;
+    data['dailyMin'] = dailyMin;
     const text = await CloudFnService.call('room.create', data, userId);
     const r = JSON.parse(text) as RoomResp;
     if (!r.success) {
@@ -117,13 +128,37 @@ export class CloudRoomService {
     }
   }
 
-  // 上报本人在本房间的专注时长（云函数支持 focus.record 时生效；不支持则忽略）
+  // 标记「正在专注中」
+  static async focusStart(userId: string, roomId: string): Promise<void> {
+    if (roomId.length === 0) return;
+    const data: Record<string, Object> = {};
+    data['roomId'] = roomId;
+    const text = await CloudFnService.call('focus.start', data, userId);
+    const r = JSON.parse(text) as OkResp;
+    if (!r.success) {
+      throw new Error(errMsg(r.error));
+    }
+  }
+
+  // 上报本人在本房间的专注时长（房间模式完成一个番茄时调用）
   static async recordFocus(userId: string, roomId: string, minutes: number): Promise<void> {
     if (roomId.length === 0 || minutes <= 0) return;
     const data: Record<string, Object> = {};
     data['roomId'] = roomId;
     data['minutes'] = minutes;
     const text = await CloudFnService.call('focus.record', data, userId);
+    const r = JSON.parse(text) as OkResp;
+    if (!r.success) {
+      throw new Error(errMsg(r.error));
+    }
+  }
+
+  // 房主移除成员
+  static async kick(userId: string, roomId: string, targetUserId: string): Promise<void> {
+    const data: Record<string, Object> = {};
+    data['roomId'] = roomId;
+    data['userId'] = targetUserId;
+    const text = await CloudFnService.call('room.kick', data, userId);
     const r = JSON.parse(text) as OkResp;
     if (!r.success) {
       throw new Error(errMsg(r.error));

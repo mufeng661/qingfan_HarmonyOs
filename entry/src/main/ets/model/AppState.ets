@@ -15,6 +15,7 @@ const KEY_CHALLENGE_GOAL = 'qf_challenge_goal';
 const KEY_DONE_COUNT = 'qf_done_count';
 const KEY_SIGN_WEEK = 'qf_sign_week';
 const KEY_ROOM_FOCUS = 'qf_room_focus';
+const KEY_TASKS_SEEDED = 'qf_tasks_seeded';
 
 // 全局状态单例
 @Observed
@@ -98,6 +99,15 @@ export class AppState {
     const s = AppState.instance;
     if (AppState.isLoggedIn()) {
       s.tasks = await Store.getArr<TaskItem>(AppState.dk(KEY_TASKS));
+      // 新账号：首次进入种入 4 条「引导待办」（只种一次，用户删光后不再重复）
+      if (s.tasks.length === 0) {
+        const seeded: boolean = await Store.getBool(AppState.dk(KEY_TASKS_SEEDED), false);
+        if (!seeded) {
+          s.tasks = AppState.tutorialTasks();
+          await Store.setArr(AppState.dk(KEY_TASKS), s.tasks);
+          await Store.setBool(AppState.dk(KEY_TASKS_SEEDED), true);
+        }
+      }
       s.records = await Store.getArr<FocusRecord>(AppState.dk(KEY_RECORDS));
       s.stats = await Store.getObj<Record<string, DailyStats>>(AppState.dk(KEY_STATS)) ?? {};
       s.challengeGoal = await Store.getInt(AppState.dk(KEY_CHALLENGE_GOAL), 4);
@@ -109,8 +119,8 @@ export class AppState {
         Store.setArr(AppState.dk(KEY_BADGES), s.badges);
       }
     } else {
-      // 游客态不保留业务数据：一律从空白开始
-      s.tasks = [];
+      // 游客态不保留业务数据：一律从空白开始（待办给引导项）
+      s.tasks = AppState.tutorialTasks();
       s.records = [];
       s.stats = {};
       s.challengeGoal = 4;
@@ -135,6 +145,17 @@ export class AppState {
       out.push(item);
     }
     return out;
+  }
+
+  // 新账号首次进入的「引导待办」：解释待办的作用，以及添加 / 删除 / 开始方法
+  static tutorialTasks(): TaskItem[] {
+    const now = Date.now();
+    return [
+      { id: 'guide_1', title: '待办是什么：把任务拆成一个个番茄，逐个专注完成', durationMin: 25, status: 'todo', difficulty: 'easy', order: 0, createdAt: now, bgSeed: 'sky' },
+      { id: 'guide_2', title: '怎么添加：点右下角「＋」新增待办，可自定义时长', durationMin: 25, status: 'todo', difficulty: 'easy', order: 1, createdAt: now, bgSeed: 'mist' },
+      { id: 'guide_3', title: '怎么删除：在待办卡片上向左滑动即可删除', durationMin: 25, status: 'todo', difficulty: 'easy', order: 2, createdAt: now, bgSeed: 'dusk' },
+      { id: 'guide_4', title: '怎么开始：点待办右侧的「开始」，进入番茄计时并种下一棵树', durationMin: 25, status: 'todo', difficulty: 'easy', order: 3, createdAt: now, bgSeed: 'sky' }
+    ];
   }
 
   static seedTasks(): TaskItem[] {

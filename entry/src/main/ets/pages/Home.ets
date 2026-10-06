@@ -1,5 +1,6 @@
 import { router, display } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
+import { pasteboard } from '@kit.BasicServicesKit';
 import { AppState } from '../model/AppState';
 import { themeOf, TaskItem, ThemeDef, FONT_DISPLAY } from '../model/Types';
 import { Store, greet, genId, todayKey } from '../model/Store';
@@ -10,6 +11,7 @@ interface GuideStep {
   icon: string;
   title: string;
   desc: string;
+  target: string;
 }
 
 interface TargetRect {
@@ -41,6 +43,11 @@ struct Home {
   @State pendingDeleteTitle: string = '';
   @State tasks: TaskItem[] = [];
   @State aiTip: string = '';
+  @State showInvite: boolean = false;
+  @State inviteRoomId: string = '';
+  @State inviteRoomName: string = '';
+  @State inviteFrom: string = '';
+  private inviteHandled: string = '';
   private t: ThemeDef = themeOf(AppState.instance.themeKey);
   private todayFocusedMin: number = 0;
   private todayFinished: number = 0;
@@ -94,6 +101,37 @@ struct Home {
     this.refreshTodayStats();
     this.refreshTasks();
     this.syncUserState();
+    this.checkInvite();
+  }
+
+  // 检测剪贴板里的自习室分享文案，命中则弹出「是否加入」
+  async checkInvite(): Promise<void> {
+    if (!AppState.isLoggedIn()) return;
+    try {
+      const data = await pasteboard.getSystemPasteboard().getData();
+      const text: string = data.getPrimaryText();
+      if (!text || (text.indexOf('加入码') < 0 && text.indexOf('房间号') < 0)) return;
+      const cm = text.match(/加入码\s*([A-Za-z0-9]{6,8})/);
+      const rm = text.match(/房间号\s*(\d{6})/);
+      const code = cm && cm.length > 1 ? cm[1] : (rm && rm.length > 1 ? rm[1] : '');
+      if (!code) return;
+      if (code === this.inviteHandled) return;
+      const nm = text.match(/「(.+?)」/);
+      const im = text.match(/邀请：(.+?) 邀请你/);
+      this.inviteRoomId = code;
+      this.inviteRoomName = nm && nm.length > 1 ? nm[1] : '好友的';
+      this.inviteFrom = im && im.length > 1 ? im[1] : '好友';
+      this.inviteHandled = code;
+      this.showInvite = true;
+    } catch (e) {
+    }
+  }
+
+  joinInvite() {
+    const id = this.inviteRoomId;
+    this.showInvite = false;
+    if (!id) return;
+    router.replaceUrl({ url: 'pages/StudyRoom', params: { join: id } });
   }
 
   onRefresh() {
@@ -134,30 +172,45 @@ struct Home {
 
   async checkGuide(): Promise<void> {
     const seen: boolean = await Store.getBool('qf_home_guide', false);
-    if (!seen) {
-      this.showGuide = true;
-    }
+    if (seen) return;
+    // 等首页布局完成（onAreaChange 量出目标坐标）后再弹出，避免高亮错位
+    setTimeout(() => { this.showGuide = true; }, 700);
   }
 
   guideSteps(): GuideStep[] {
+    // 游客看不到「签到 / 挑战」（需登录），按登录状态给不同引导
+    if (!AppState.isLoggedIn()) {
+      return [
+        { icon: '📝', title: '今日待办', desc: '点这里添加今天的任务；长按可拖动排序，点「开始」进入专注计时。', target: 'todo' },
+        { icon: '✨', title: 'AI 助手', desc: '登录后可让青番 AI 帮你排待办、找高效时段、看专注洞察，还能一键把计划加进待办。', target: 'ai' },
+        { icon: '🧭', title: '底部导航', desc: '今日 / 自习室 / 时间轴 / 数据 / 我的，随时切换。', target: 'tab' }
+      ];
+    }
     return [
-      { icon: '🎁', title: '每日签到', desc: '点右上角「签到 +10」领取经验，连续签到奖励会递增。' },
-      { icon: '🏆', title: '今日挑战', desc: '完成目标番茄数即达成挑战，额外 +50 经验；点「调整」可自定义目标。' },
-      { icon: '✨', title: 'AI 助手', desc: '点这张卡片，让青番 AI 帮你排待办、找高效时段、看专注洞察。' },
-      { icon: '📝', title: '今日待办', desc: '长按待办可拖动排序；点「开始」进入专注计时，完成后种下一棵树。' },
-      { icon: '🧭', title: '底部导航', desc: '今日 / 自习室 / 统计 / 排行 / 我的，随时切换。' }
+      { icon: '🎁', title: '每日签到', desc: '点右上角「签到」领取经验，连续签到奖励会递增。', target: 'sign' },
+      { icon: '🏆', title: '今日挑战', desc: '完成目标番茄数即达成挑战，额外 +50 经验；点「调整」可自定义目标。', target: 'challenge' },
+      { icon: '✨', title: 'AI 助手', desc: '点这张卡片，让青番 AI 帮你排待办、找高效时段、看专注洞察。', target: 'ai' },
+      { icon: '📝', title: '今日待办', desc: '长按待办可拖动排序；点「开始」进入专注计时，完成后种下一棵树。', target: 'todo' },
+      { icon: '🧭', title: '底部导航', desc: '今日 / 自习室 / 时间轴 / 数据 / 我的，随时切换。', target: 'tab' }
     ];
   }
 
+  curStep(): GuideStep {
+    const steps = this.guideSteps();
+    const i = this.guideStep < steps.length ? this.guideStep : steps.length - 1;
+    return steps[i];
+  }
+
   spot(): TargetRect {
-    let r: TargetRect = this.rectSign;
-    if (this.guideStep === 1) {
+    const target: string = this.curStep().target;
+    let r: TargetRect = this.rectTodo;
+    if (target === 'sign') {
+      r = this.rectSign;
+    } else if (target === 'challenge') {
       r = this.rectChallenge;
-    } else if (this.guideStep === 2) {
+    } else if (target === 'ai') {
       r = this.rectAi;
-    } else if (this.guideStep === 3) {
-      r = this.rectTodo;
-    } else if (this.guideStep >= 4) {
+    } else if (target === 'tab') {
       r = this.rectTab;
     }
     const pad = 6;
@@ -441,6 +494,46 @@ struct Home {
       if (this.showGuide) {
         this.guideOverlay()
       }
+      if (this.showInvite) {
+        this.invitePanel()
+      }
+    }
+  }
+
+  @Builder
+  invitePanel() {
+    Stack() {
+      Column()
+        .width('100%').height('100%')
+        .backgroundColor('rgba(30,40,26,0.42)')
+        .onClick(() => { this.showInvite = false; })
+      Column() {
+        Text('自习室邀请').fontFamily(FONT_DISPLAY).fontSize(17).fontColor(this.t.ink)
+        Text(this.inviteFrom + ' 邀请你进入「' + this.inviteRoomName + '」自习室，是否加入？')
+          .fontSize(12.5).fontColor(this.t.ink2).lineHeight(20)
+          .textAlign(TextAlign.Center).margin({ top: 10, bottom: 18 })
+        Row({ space: 10 }) {
+          Row() {
+            Text('忽略').fontSize(14).fontColor(this.t.ink2)
+          }
+          .layoutWeight(1).height(44).borderRadius(12)
+          .border({ width: 1, color: this.t.line })
+          .justifyContent(FlexAlign.Center)
+          .onClick(() => { this.showInvite = false; })
+
+          Row() {
+            Text('加入').fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Medium)
+          }
+          .layoutWeight(1).height(44).borderRadius(12)
+          .backgroundColor(this.t.leaf)
+          .justifyContent(FlexAlign.Center)
+          .onClick(() => { this.joinInvite(); })
+        }
+        .width('100%')
+      }
+      .width(300).padding(22)
+      .backgroundColor(this.t.surface).borderRadius(22)
+      .alignItems(HorizontalAlign.Center)
     }
   }
 
@@ -760,7 +853,7 @@ struct Home {
             .fontSize(14.5)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.t.ink)
-            .maxLines(1)
+            .maxLines(t.id.indexOf('guide_') === 0 ? 2 : 1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .decoration(t.status === 'done' ? { type: TextDecorationType.LineThrough } : { type: TextDecorationType.None })
           this.diffTag(t.difficulty)
@@ -1062,13 +1155,13 @@ struct Home {
       Column() {
         Row({ space: 10 }) {
           Column() {
-            Text(this.guideSteps()[this.guideStep].icon).fontSize(22)
+            Text(this.curStep().icon).fontSize(22)
           }
           .width(42).height(42).borderRadius(13)
           .backgroundColor(this.t.leafSoft)
           .justifyContent(FlexAlign.Center)
 
-          Text(this.guideSteps()[this.guideStep].title)
+          Text(this.curStep().title)
             .fontFamily(FONT_DISPLAY)
             .fontSize(17)
             .fontColor(this.t.ink)
@@ -1076,7 +1169,7 @@ struct Home {
         }
         .width('100%')
 
-        Text(this.guideSteps()[this.guideStep].desc)
+        Text(this.curStep().desc)
           .fontSize(12.5)
           .fontColor(this.t.ink2)
           .lineHeight(20)

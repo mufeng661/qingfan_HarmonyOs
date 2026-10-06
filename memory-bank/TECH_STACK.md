@@ -49,6 +49,7 @@ entry/src/main/ets/
 | 账号 | `auth.register` / `auth.login` | 用户名+手机号+密码注册 / 手机号+密码登录，返回 `{ token, user }` |
 | 房间 | `room.create` / `room.listMine` / `room.get` / `room.join` / `room.leave` / `room.delete` | 创建 / 我的房间 / 房间详情(含成员) / 加入 / 退出 / 解散 |
 | 留言 | `comment.list` / `comment.add` / `comment.like` / `comment.delete` | 列表 / 发表(支持 parentId 回复) / 点赞 / 删除 |
+| 自习室 | `room.kick` / `focus.start` / `focus.record` / `room.settle` | 房主移除成员 / 标记正在专注 / 上报房间专注时长 / 每日定时结算（达标天数、未达标移出）。房间支持 6 位房间号 + 8 位加入码、`daily_min` 每日最低专注 |
 | AI | `ai.chat` / `ai.insight` | 对话 / 专注洞察（云函数内调第三方大模型，返回 `{ reply }`） |
 
 ### 6.1 真实 AI 接入（B 方案）

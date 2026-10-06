@@ -32,6 +32,8 @@
 - [x] B7 接入真实 AI（B 方案）：云函数新增 `ai.chat` / `ai.insight`（OpenAI 兼容，密钥走云函数环境变量 `AI_BASE_URL`/`AI_API_KEY`/`AI_MODEL`）；前端新增 `CloudAiService`，`AIChat`/`Stats`/`Home` 接入并保留离线回退
 - [x] B8 AI 用量治理：`ai_usage_self` 表 + 云函数每人每日配额（`AI_DAILY_LIMIT`）+ 频率限制（`AI_MIN_INTERVAL_MS`），超限返回 `AI_QUOTA_EXCEEDED`/`AI_RATE_LIMIT`
 - [x] B9 AI 计划联动待办：`ai.chat` 支持 `wantPlan` 返回结构化 `todos`；`AIChat` 自动写入待办列表；聊天记录本地持久化 + 一键清空
+- [x] B10 自习室升级：**一人一室**（create/join 校验）、`focus.record` 上报房间专注时长、`room_members_self.focus_minutes` 排名、`room.kick` 房主长按移出、分享邀请（复制文案 + 首页剪贴板弹窗）、房主解散 10s 二次确认
+- [x] B11 自习室规则升级：新增 8 位**加入码**与**每日最低专注时长**（`rooms_self.join_code`/`daily_min`）；`focus.start` 标记正在专注、`focus.record` 累加当日；**许愿墙**（留言需当日达标 `NEED_FOCUS`）；**`room.settle` 每日定时结算**（未达标移出、达标累计连续/共专注天数）；房间页按图重设计（加入码/正在专注中/当前排名/成员卡片）
 
 ## C. Web / 小程序端（功能与鸿蒙一致）
 

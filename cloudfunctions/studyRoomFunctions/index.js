@@ -3,7 +3,7 @@ const { hashPassword, verifyPassword } = require("./password");
 const { verifyToken } = require("./token");
 const auth = require("./auth");
 const ai = require("./ai");
-const { now, ok, fail, toPositiveInt, isValidRoomId, resolveRole, roleAdmin } = require("./utils");
+const { now, dateKeyOf, todayKey, dateKeyOffset, ok, fail, toPositiveInt, isValidRoomId, resolveRole, roleAdmin } = require("./utils");
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -51,6 +51,8 @@ function publicRoom(row, extra) {
       name: row.name,
       owner_id: row.owner_id,
       need_password: Boolean(row.password_hash),
+      join_code: row.join_code || "",
+      daily_min: row.daily_min || 0,
       created_at: row.created_at,
       updated_at: row.updated_at,
     },
@@ -73,11 +75,48 @@ async function fetchRoomRow(roomId) {
   return selectOne(
     db
       .from("rooms_self")
-      .select("id,room_no,name,owner_id,password_hash,password_salt,is_deleted,created_at,updated_at")
+      .select("id,room_no,name,owner_id,password_hash,password_salt,is_deleted,created_at,updated_at,join_code,daily_min")
       .eq("room_no", roomId)
       .eq("is_deleted", 0)
       .limit(1)
   );
+}
+
+// 按「6 位房间号」或「8 位加入码」解析房间
+async function resolveRoom(identifier) {
+  const s = String(identifier || "").trim();
+  if (!s) return null;
+  if (/^\d{6}$/.test(s)) return fetchRoomRow(s);
+  const code = s.toUpperCase();
+  return selectOne(
+    db
+      .from("rooms_self")
+      .select("id,room_no,name,owner_id,password_hash,password_salt,is_deleted,created_at,updated_at,join_code,daily_min")
+      .eq("join_code", code)
+      .eq("is_deleted", 0)
+      .limit(1)
+  );
+}
+
+// 成员在当前房间的当日数据（含跨天重置）
+async function memberToday(roomId, userId) {
+  const m = await selectOne(
+    db
+      .from("room_members_self")
+      .select("id,role,focus_minutes,today_minutes,today_date,streak_days,total_days,last_met_date,focusing")
+      .eq("room_id", roomId)
+      .eq("user_id", userId)
+      .limit(1)
+  );
+  if (m && m.today_date !== todayKey()) {
+    await run(
+      db.from("room_members_self").update({ today_minutes: 0, today_date: todayKey(), focusing: 0 }).eq("id", m.id)
+    );
+    m.today_minutes = 0;
+    m.today_date = todayKey();
+    m.focusing = 0;
+  }
+  return m;
 }
 
 async function isMember(roomId, userId) {
@@ -104,6 +143,24 @@ async function generateRoomNo() {
   throw new Error("房间号生成失败，请重试");
 }
 
+function randomJoinCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+async function generateJoinCode() {
+  for (let i = 0; i < 20; i++) {
+    const code = randomJoinCode();
+    const exist = await selectRows(
+      db.from("rooms_self").select("join_code").eq("join_code", code).limit(1)
+    );
+    if (!exist.length) return code;
+  }
+  throw new Error("加入码生成失败，请重试");
+}
+
 async function roomCreate(params, ctx) {
   const userId = ctx.userId || "";
   if (!userId) return fail("未获取到用户身份，请稍后重试", "NO_USER");
@@ -115,7 +172,19 @@ async function roomCreate(params, ctx) {
   const password = params.password ? String(params.password) : "";
   if (password.length > 32) return fail("房间密码不能超过 32 位", "PASSWORD_TOO_LONG");
 
+  // 一人一室：已在其他未解散的自习室时不能再创建
+  const occupied = await activeRoomOf(userId, "");
+  if (occupied) {
+    return fail("你已在自习室 " + occupied + " 中，请先退出再创建", "ALREADY_IN_ROOM", {
+      roomId: occupied,
+    });
+  }
+
   const roomId = await generateRoomNo();
+  const joinCode = await generateJoinCode();
+  let dailyMin = parseInt(params.dailyMin, 10);
+  if (!Number.isFinite(dailyMin) || dailyMin < 0) dailyMin = 30;
+  if (dailyMin > 1440) dailyMin = 1440;
   const timestamp = now();
   let hash = null;
   let salt = null;
@@ -129,6 +198,8 @@ async function roomCreate(params, ctx) {
     db.from("rooms_self").insert([
       {
         room_no: roomId,
+        join_code: joinCode,
+        daily_min: dailyMin,
         name,
         owner_id: userId,
         password_hash: hash,
@@ -149,6 +220,12 @@ async function roomCreate(params, ctx) {
         joined_at: timestamp,
         updated_at: timestamp,
         last_active_at: timestamp,
+        focus_minutes: 0,
+        today_minutes: 0,
+        today_date: todayKey(),
+        streak_days: 0,
+        total_days: 0,
+        focusing: 0,
       },
     ])
   );
@@ -158,6 +235,8 @@ async function roomCreate(params, ctx) {
     name,
     owner_id: userId,
     need_password: Boolean(hash),
+    join_code: joinCode,
+    daily_min: dailyMin,
     created_at: timestamp,
     updated_at: timestamp,
     role: "owner",
@@ -165,16 +244,38 @@ async function roomCreate(params, ctx) {
   });
 }
 
+// 用户当前所在的（未解散）自习室号；排除 exceptRoomId
+async function activeRoomOf(userId, exceptRoomId) {
+  const memberships = await selectRows(
+    db.from("room_members_self").select("room_id").eq("user_id", userId)
+  );
+  if (!memberships.length) return null;
+  const ids = memberships.map((m) => m.room_id);
+  const rooms = await selectRows(
+    db.from("rooms_self").select("room_no").in("room_no", ids).eq("is_deleted", 0)
+  );
+  const active = rooms.map((r) => r.room_no).filter((id) => id !== exceptRoomId);
+  return active.length ? active[0] : null;
+}
+
 async function roomJoin(params, ctx) {
   const userId = ctx.userId || "";
   if (!userId) return fail("未获取到用户身份，请稍后重试", "NO_USER");
 
-  const roomId = String(params.roomId || "").trim();
-  if (!roomId) return fail("请输入房间号", "MISSING_ROOM_ID");
-  if (!isValidRoomId(roomId)) return fail("房间号不正确", "INVALID_ROOM_ID");
+  const input = String(params.roomId || "").trim();
+  if (!input) return fail("请输入房间号或加入码", "MISSING_ROOM_ID");
 
-  const room = await fetchRoomRow(roomId);
+  const room = await resolveRoom(input);
   if (!room) return fail("房间不存在或已解散", "ROOM_NOT_FOUND");
+  const roomId = room.room_no;
+
+  // 一人一室：已加入其他未解散的自习室时不能再加入
+  const occupied = await activeRoomOf(userId, roomId);
+  if (occupied) {
+    return fail("你已在自习室 " + occupied + " 中，请先退出再加入其他自习室", "ALREADY_IN_ROOM", {
+      roomId: occupied,
+    });
+  }
 
   if (room.password_hash) {
     const passed = verifyPassword(params.password || "", room.password_salt, room.password_hash);
@@ -191,9 +292,23 @@ async function roomJoin(params, ctx) {
   );
 
   if (!existing.length) {
+    const ts = now();
     await run(
       db.from("room_members_self").insert([
-        { room_id: roomId, user_id: userId, role: "member", joined_at: now() },
+        {
+          room_id: roomId,
+          user_id: userId,
+          role: "member",
+          joined_at: ts,
+          updated_at: ts,
+          last_active_at: ts,
+          focus_minutes: 0,
+          today_minutes: 0,
+          today_date: todayKey(),
+          streak_days: 0,
+          total_days: 0,
+          focusing: 0,
+        },
       ])
     );
   }
@@ -209,7 +324,7 @@ async function roomListMine(params, ctx) {
   const memberships = await selectRows(
     db
       .from("room_members_self")
-      .select("room_id,role,joined_at")
+      .select("room_id,role,joined_at,focus_minutes")
       .eq("user_id", userId)
       .order("joined_at", { ascending: false })
   );
@@ -232,8 +347,10 @@ async function roomListMine(params, ctx) {
     counts[row.room_id] = (counts[row.room_id] || 0) + 1;
   });
   const roleByRoom = {};
+  const focusByRoom = {};
   memberships.forEach((item) => {
     roleByRoom[item.room_id] = item.role;
+    focusByRoom[item.room_id] = item.focus_minutes || 0;
   });
   const roomById = {};
   rooms.forEach((room) => {
@@ -244,7 +361,11 @@ async function roomListMine(params, ctx) {
     .map((id) => {
       const room = roomById[id];
       if (!room) return null;
-      return publicRoom(room, { role: roleByRoom[id] || "member", member_count: counts[id] || 0 });
+      return publicRoom(room, {
+        role: roleByRoom[id] || "member",
+        member_count: counts[id] || 0,
+        my_focus_minutes: focusByRoom[id] || 0,
+      });
     })
     .filter(Boolean);
 
@@ -260,19 +381,145 @@ async function roomGet(params, ctx) {
   const room = await fetchRoomRow(roomId);
   if (!room) return fail("房间不存在或已解散", "ROOM_NOT_FOUND");
 
+  await memberToday(roomId, userId);
   const members = await selectRows(
     db
       .from("room_members_self")
-      .select("user_id,role,joined_at")
+      .select("user_id,role,joined_at,focus_minutes,today_minutes,today_date,streak_days,total_days,focusing")
       .eq("room_id", roomId)
-      .order("joined_at", { ascending: true })
+      .order("focus_minutes", { ascending: false })
   );
   const mine = members.find((item) => item.user_id === userId);
   if (!mine) return fail("你不是该房间成员", "NOT_MEMBER");
 
   return ok(
-    publicRoom(room, { role: mine.role, member_count: members.length, members })
+    publicRoom(room, {
+      role: mine.role,
+      member_count: members.length,
+      members,
+      my_focus_minutes: mine.focus_minutes || 0,
+      my_today_minutes: mine.today_minutes || 0,
+    })
   );
+}
+
+// 开始专注（标记「正在专注中」）
+async function focusStart(params, ctx) {
+  const userId = ctx.userId || "";
+  if (!userId) return fail("未获取到用户身份，请稍后重试", "NO_USER");
+  const roomId = String(params.roomId || "").trim();
+  if (!isValidRoomId(roomId)) return fail("房间号不正确", "INVALID_ROOM_ID");
+  if (!(await isMember(roomId, userId))) return fail("你不是该房间成员", "NOT_MEMBER");
+  const member = await memberToday(roomId, userId);
+  if (!member) return fail("你不是该房间成员", "NOT_MEMBER");
+  const ts = now();
+  await run(
+    db
+      .from("room_members_self")
+      .update({ focusing: 1, today_date: member.today_date, last_active_at: ts, updated_at: ts })
+      .eq("id", member.id)
+  );
+  return ok({ roomId });
+}
+
+// 上报专注时长（房间模式完成一个番茄时调用），累加到成员记录
+async function focusRecord(params, ctx) {
+  const userId = ctx.userId || "";
+  if (!userId) return fail("未获取到用户身份，请稍后重试", "NO_USER");
+
+  const roomId = String(params.roomId || "").trim();
+  if (!isValidRoomId(roomId)) return fail("房间号不正确", "INVALID_ROOM_ID");
+  const minutes = toPositiveInt(params.minutes, 0);
+  if (!minutes) return fail("缺少专注时长", "EMPTY_MINUTES");
+
+  const room = await fetchRoomRow(roomId);
+  if (!room) return fail("房间不存在或已解散", "ROOM_NOT_FOUND");
+  if (!(await isMember(roomId, userId))) return fail("你不是该房间成员", "NOT_MEMBER");
+
+  const member = await memberToday(roomId, userId);
+  if (!member) return fail("你不是该房间成员", "NOT_MEMBER");
+
+  const nextTotal = (member.focus_minutes || 0) + minutes;
+  const nextToday = (member.today_minutes || 0) + minutes;
+  const ts = now();
+  await run(
+    db
+      .from("room_members_self")
+      .update({
+        focus_minutes: nextTotal,
+        today_minutes: nextToday,
+        today_date: member.today_date,
+        focusing: 0,
+        last_active_at: ts,
+        updated_at: ts,
+      })
+      .eq("id", member.id)
+  );
+  return ok({ roomId, focus_minutes: nextTotal, today_minutes: nextToday });
+}
+
+// 房主移除成员（长按成员卡片，二次确认后调用）
+async function roomKick(params, ctx) {
+  const userId = ctx.userId || "";
+  const roomId = String(params.roomId || "").trim();
+  if (!isValidRoomId(roomId)) return fail("房间号不正确", "INVALID_ROOM_ID");
+
+  const room = await fetchRoomRow(roomId);
+  if (!room) return fail("房间不存在或已解散", "ROOM_NOT_FOUND");
+  if (room.owner_id !== userId) return fail("只有房主可以移除成员", "FORBIDDEN");
+
+  const target = String(params.userId || "").trim();
+  if (!target) return fail("缺少成员标识", "MISSING_MEMBER");
+  if (target === userId) return fail("不能移除房主自己", "CANNOT_KICK_SELF");
+
+  await run(db.from("room_members_self").delete().eq("room_id", roomId).eq("user_id", target));
+  return ok({ roomId, userId: target });
+}
+
+// 每日结算（定时触发）：达标累计连续/共专注天数；未达标移出（房主除外）
+async function roomSettle() {
+  const prev = dateKeyOffset(-1);
+  const prevPrev = dateKeyOffset(-2);
+  const today = todayKey();
+  const rooms = await selectRows(
+    db.from("rooms_self").select("room_no,daily_min").eq("is_deleted", 0)
+  );
+  let removed = 0;
+  let met = 0;
+  for (const room of rooms) {
+    const min = room.daily_min || 0;
+    if (min <= 0) continue;
+    const members = await selectRows(
+      db
+        .from("room_members_self")
+        .select("id,user_id,role,joined_at,today_minutes,today_date,streak_days,total_days,last_met_date")
+        .eq("room_id", room.room_no)
+    );
+    for (const m of members) {
+      const okDay = m.today_date === prev && (m.today_minutes || 0) >= min;
+      if (okDay) {
+        const streak = m.last_met_date === prevPrev ? (m.streak_days || 0) + 1 : 1;
+        await run(
+          db
+            .from("room_members_self")
+            .update({ streak_days: streak, total_days: (m.total_days || 0) + 1, last_met_date: prev })
+            .eq("id", m.id)
+        );
+        met += 1;
+      } else if (m.role !== "owner" && dateKeyOf(m.joined_at) !== today) {
+        await run(db.from("room_members_self").delete().eq("id", m.id));
+        removed += 1;
+        continue;
+      }
+      await run(
+        db
+          .from("room_members_self")
+          .update({ today_minutes: 0, today_date: today, focusing: 0 })
+          .eq("id", m.id)
+      );
+    }
+  }
+  return ok({ rooms: rooms.length, met, removed });
 }
 
 async function roomLeave(params, ctx) {
@@ -364,6 +611,19 @@ async function commentAdd(params, ctx) {
   const roomId = String(params.roomId || "").trim();
   if (!isValidRoomId(roomId)) return fail("房间号不正确", "INVALID_ROOM_ID");
   if (!(await isMember(roomId, userId))) return fail("你不是该房间成员", "NOT_MEMBER");
+
+  // 需完成当日最低专注时长后才能留言
+  const room = await fetchRoomRow(roomId);
+  const needMin = room ? room.daily_min || 0 : 0;
+  if (needMin > 0) {
+    const m = await memberToday(roomId, userId);
+    const t = m ? m.today_minutes || 0 : 0;
+    if (t < needMin) {
+      return fail("今日专注未满 " + needMin + " 分钟，达标后才能留言", "NEED_FOCUS", {
+        need: needMin - t,
+      });
+    }
+  }
 
   const content = String(params.content || "").trim();
   if (!content) return fail("留言内容不能为空", "EMPTY_CONTENT");
@@ -533,6 +793,10 @@ const handlers = {
   "room.get": roomGet,
   "room.leave": roomLeave,
   "room.delete": roomDelete,
+  "room.kick": roomKick,
+  "room.settle": roomSettle,
+  "focus.start": focusStart,
+  "focus.record": focusRecord,
   "comment.list": commentList,
   "comment.add": commentAdd,
   "comment.delete": commentDelete,
@@ -600,6 +864,16 @@ function httpResponse(result) {
 }
 
 exports.main = async (event = {}, context) => {
+  // 定时触发器：每日结算（未达标移出）
+  if (event.Type === "Timer" || event.TriggerName) {
+    try {
+      return await roomSettle();
+    } catch (error) {
+      console.error("[studyRoomFunctions] settle error:", error && error.message);
+      return fail(error && error.message ? error.message : "结算失败", "INTERNAL_ERROR");
+    }
+  }
+
   const isHttp = Boolean(event.httpMethod || event.requestContext || event.headers);
 
   if (isHttp && event.httpMethod === "OPTIONS") {

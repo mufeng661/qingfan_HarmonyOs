@@ -47,14 +47,18 @@ Preferences 库名 `qf_store`。**业务数据按账号隔离**：key = `基础k
 |---|---|---|
 | `auth.register` | `{ username, phone, password }` | `{ token, user:{ id, phone, username, nickname, avatarSeed, bio, created_at } }` |
 | `auth.login` | `{ phone, password }` | 同上 |
-| `room.create` | `{ name, password? }` | `Room` |
+| `room.create` | `{ name, password?, dailyMin? }` | `Room`（含 `join_code`/`daily_min`） |
 | `room.listMine` | `{}` | `{ list: Room[] }` |
-| `room.get` | `{ roomId }` | `Room & { members: RoomMember[] }` |
-| `room.join` | `{ roomId, password? }` | `Room` |
+| `room.get` | `{ roomId }` | `Room & { members: RoomMember[] }`（成员含 today_minutes/streak_days/total_days/focusing） |
+| `room.join` | `{ roomId, password? }` | `Room`（`roomId` 可为 6 位房间号或 8 位加入码） |
 | `room.leave` | `{ roomId }` | `{ roomId }` |
-| `room.delete` | `{ roomId }` | `{ roomId }` |
+| `room.delete` | `{ roomId }` | `{ roomId }`（解散，仅房主） |
+| `room.kick` | `{ roomId, userId }` | `{ roomId, userId }`（仅房主；长按成员卡片触发） |
+| `focus.start` | `{ roomId }` | `{ roomId }`（标记「正在专注中」） |
+| `focus.record` | `{ roomId, minutes }` | `{ roomId, focus_minutes, today_minutes }`（房间/待办模式完成番茄时累加） |
+| `room.settle` | —（定时触发 `Type=Timer`） | `{ rooms, met, removed }`（每日结算：达标累计连续/共专注天数，未达标移出，房主除外） |
 | `comment.list` | `{ roomId, page, pageSize }` | `{ list: Comment[], total, page, pageSize, hasMore }` |
-| `comment.add` | `{ roomId, nickname, content, parentId? }` | `Comment` |
+| `comment.add` | `{ roomId, nickname, content, parentId? }` | `Comment`（**需当日专注 ≥ `daily_min`**，否则 `NEED_FOCUS`） |
 | `comment.like` | `{ roomId, id, action }` | `{ likes, liked }` |
 | `comment.delete` | `{ roomId, id }` | — |
 | `ai.chat` | `{ messages:[{role,content}], prompt?, context?, wantPlan? }` | `{ reply, todos?: AiTodo[] }` |
@@ -63,7 +67,7 @@ Preferences 库名 `qf_store`。**业务数据按账号隔离**：key = `基础k
 公共字段：请求体带 `action` / `userId` / `platform:'harmony'`，请求头 `x-user-id` / `x-user-platform`。
 
 ```ts
-Room       { id:string(6 位房间号), name, owner_id, need_password, created_at, updated_at, role:'owner'|'member', member_count, members?: RoomMember[] }
+Room       { id:string(6 位房间号), name, owner_id, need_password, created_at, updated_at, role:'owner'|'member', member_count, my_focus_minutes?, members?: RoomMember[] }
 RoomMember { user_id, role, joined_at, nickname?, focus_minutes? }   // 后两者为「待后端支持」的可选字段
 Comment    { id:number, project_id(=roomId), parent_id, root_id, reply_to_name, nickname, content, role, likes, liked, can_delete, created_at }
 AiTodo     { title:string, durationMin:number, difficulty:'easy'|'medium'|'hard' }   // ai.chat 的 wantPlan=true 时返回，前端自动加入待办
@@ -71,8 +75,8 @@ AiTodo     { title:string, durationMin:number, difficulty:'easy'|'medium'|'hard'
 
 ### 3.2 云表（MySQL）
 
-- `rooms_self`：房间（`id` bigint 自增 PK / `room_no` varchar(32) 唯一（6 位房间号，对外即 `Room.id`）/ name / owner_id / password_hash / password_salt / is_deleted / created_at / updated_at）。**创建时由云函数生成唯一 `room_no` 写入**。
-- `room_members_self`：房间成员（`room_id` char(6)=房间号 / user_id / role / joined_at / updated_at / last_active_at）。
+- `rooms_self`：房间（`id` bigint 自增 PK / `room_no` 6 位唯一（对外即 `Room.id`）/ `join_code` 8 位唯一加入码 / `daily_min` 每日最低专注分钟（0=不设限）/ name / owner_id / password_* / is_deleted / created_at / updated_at）。**创建时生成 `room_no` 与 `join_code`**。
+- `room_members_self`：房间成员（`room_id` char(6)=房间号 / user_id / role / joined_at / updated_at / last_active_at / `focus_minutes`（累计专注，排名用）/ `today_minutes`+`today_date`（当日专注，跨天重置）/ `streak_days`（连续达标天数）/ `total_days`（累计达标天数）/ `focusing`（正在专注中）/ `last_met_date`）。**一人一室**：`room.create` / `room.join` 校验。
 - `comments_self`：留言（id/project_id(=房间号)/parent_id/root_id/nickname/content/role/likes/liked_by/created_at/updated_at）。
 - `ai_usage_self`：AI 用量（`user_id` + `usage_date`(北京时间 YYYY-MM-DD) 唯一 / `used` 当日次数 / `last_at` 上次调用毫秒）。**列名用 `used` 而非 `count`**（CloudBase rdb 会把 `count` 当聚合函数，不能与其他字段一起 select）。
 

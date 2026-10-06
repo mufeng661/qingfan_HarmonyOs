@@ -6,6 +6,7 @@ import { Store, formatMMSS, genId, todayKey } from '../model/Store';
 import { CloudRoomService, Room, RoomMember } from '../service/CloudRoomService';
 
 interface RankMemberView {
+  userId: string;
   name: string;
   role: string;
   joinedAt: number;
@@ -29,6 +30,10 @@ struct Focus {
   @State showRank: boolean = false;
   @State rankMembers: RankMemberView[] = [];
   @State rankLoading: boolean = false;
+  @State isOwner: boolean = false;
+  @State showKick: boolean = false;
+  @State kickId: string = '';
+  @State kickName: string = '';
   @State showContinue: boolean = false;
   @State ringTick: number = 0;
   @State startTs: number = 0;
@@ -119,13 +124,25 @@ struct Focus {
     this.loadRank();
   }
 
-  // 上报本房间专注时长（云函数支持 focus.record 时生效；不支持则忽略）
+  // 上报本房间专注时长（房间模式）
   reportRoomFocus(mins: number) {
     if (this.roomId.length === 0 || mins <= 0) return;
     const uid = AppState.userKey();
     CloudRoomService.recordFocus(uid, this.roomId, mins).catch((err: Object) => {
       console.warn('focus.record unsupported: ' + err);
     });
+  }
+
+  // 待办模式：把完成的专注时长计入本人当前所在的自习室（一人一室，取第一个）
+  async reportToMyRoom(mins: number): Promise<void> {
+    if (!AppState.isLoggedIn() || mins <= 0) return;
+    const uid = AppState.userKey();
+    try {
+      const list = await CloudRoomService.listMine(uid);
+      if (list.length === 0) return;
+      await CloudRoomService.recordFocus(uid, String(list[0].id), mins);
+    } catch (e) {
+    }
   }
 
   // 排行只显示「已加入该房间」的成员（按加入时间排序，房主在前）
@@ -136,6 +153,7 @@ struct Focus {
       const uid = AppState.userKey();
       const myName = AppState.instance.user?.nickname ?? '我';
       const detail = await CloudRoomService.get(uid, this.roomId);
+      this.isOwner = detail.owner_id === uid;
       const members: RoomMember[] = detail.members ? detail.members : [];
       const rows: RankMemberView[] = [];
       for (let i = 0; i < members.length; i++) {
@@ -154,6 +172,7 @@ struct Focus {
           mins = AppState.roomFocusOf(this.roomId);
         }
         const row: RankMemberView = {
+          userId: m.user_id,
           name: name,
           role: m.role === 'owner' ? '房主' : '成员',
           joinedAt: m.joined_at,
@@ -187,7 +206,7 @@ struct Focus {
         .onClick(() => { this.showRank = false; })
       Column() {
         Text('房间成员').fontFamily('serif').fontSize(17).fontColor('#2C3A28')
-        Text('只显示已加入本自习室的用户 · 专注时长为本人本机累计')
+        Text(this.isOwner ? '按专注时长排名 · 长按成员可移出' : '按专注时长排名')
           .fontSize(11.5).fontColor('#84917D').margin({ top: 2, bottom: 12 })
 
         if (this.rankLoading) {
@@ -226,6 +245,16 @@ struct Focus {
             .width('100%')
             .padding({ top: 10, bottom: 10 })
             .border({ width: { bottom: 1 }, color: '#E3E9DB' })
+            .gesture(
+              LongPressGesture()
+                .onAction(() => {
+                  if (this.isOwner && !r.isMe && r.role !== '房主') {
+                    this.kickId = r.userId;
+                    this.kickName = r.name;
+                    this.showKick = true;
+                  }
+                })
+            )
           }, (r: RankMemberView) => r.name)
         }
 
@@ -240,6 +269,54 @@ struct Focus {
       }
       .width(300).padding(22)
       .backgroundColor('#FFFFFF').borderRadius(22)
+    }
+  }
+
+  @Builder
+  kickPanel() {
+    Stack() {
+      Column()
+        .width('100%').height('100%')
+        .backgroundColor('rgba(30,40,26,0.42)')
+        .onClick(() => { this.showKick = false; })
+      Column() {
+        Text('移出成员').fontFamily('serif').fontSize(17).fontColor('#2C3A28')
+        Text('确定将「' + this.kickName + '」移出自习室吗？')
+          .fontSize(12.5).fontColor('#84917D').margin({ top: 10, bottom: 18 })
+        Row({ space: 10 }) {
+          Row() {
+            Text('取消').fontSize(14).fontColor('#6B7A63')
+          }
+          .layoutWeight(1).height(44).borderRadius(12)
+          .border({ width: 1, color: '#E3E9DB' })
+          .justifyContent(FlexAlign.Center)
+          .onClick(() => { this.showKick = false; })
+
+          Row() {
+            Text('移出').fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Medium)
+          }
+          .layoutWeight(1).height(44).borderRadius(12)
+          .backgroundColor('#C0574B')
+          .justifyContent(FlexAlign.Center)
+          .onClick(() => { this.confirmKick(); })
+        }
+        .width('100%')
+      }
+      .width(300).padding(22)
+      .backgroundColor('#FFFFFF').borderRadius(22)
+    }
+  }
+
+  async confirmKick(): Promise<void> {
+    const target = this.kickId;
+    this.showKick = false;
+    if (!target) return;
+    try {
+      await CloudRoomService.kick(AppState.userKey(), this.roomId, target);
+      promptAction.showToast({ message: '已将该成员移出自习室', duration: 1500 });
+      await this.loadRank();
+    } catch (e) {
+      promptAction.showToast({ message: '移除失败，请稍后重试', duration: 1500 });
     }
   }
 
@@ -296,6 +373,9 @@ struct Focus {
   startTimer() {
     if (this.running) return;
     this.running = true;
+    if (this.roomId.length > 0) {
+      CloudRoomService.focusStart(AppState.userKey(), this.roomId).catch((e: Object) => {});
+    }
     this.startTs = Date.now() - this.elapsedSec * 1000;
     this.timerId = setInterval(() => {
       const elapsed = Math.floor((Date.now() - this.startTs) / 1000);
@@ -361,6 +441,9 @@ struct Focus {
       const mins = Math.floor(this.elapsedSec / 60);
       AppState.addRoomFocus(this.roomId, mins);
       this.reportRoomFocus(mins);
+    } else if (success) {
+      // 待办模式：完成待办所专注的时长也计入本人所在自习室
+      this.reportToMyRoom(Math.floor(this.elapsedSec / 60));
     }
 
     if (success) {
@@ -615,6 +698,9 @@ struct Focus {
       }
       if (this.showContinue) {
         this.continuePanel()
+      }
+      if (this.showKick) {
+        this.kickPanel()
       }
     }
   }
