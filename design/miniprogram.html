@@ -770,8 +770,9 @@
     const DURATIONS = [25, 15, 5, 1];
 
     function ScreenFocus({ task, onQuit, onComplete }) {
-      const [total, setTotal] = useState(25 * 60);
-      const [remaining, setRemaining] = useState(25 * 60);
+      const initSec = (task && task.durationMin ? task.durationMin : 25) * 60;
+      const [total, setTotal] = useState(initSec);
+      const [remaining, setRemaining] = useState(initSec);
       const [bg, setBg] = useState(BG_THEMES[0]);
       const [music, setMusic] = useState(MUSICS[0]);
       const [showQuit, setShowQuit] = useState(false);
@@ -824,15 +825,7 @@
               </div>
             </div>
 
-            {/* 时长切换 */}
-            <div style={{ display: 'flex', gap: 8, marginTop: 22 }}>
-              {DURATIONS.map(d => {
-                const active = total === d * 60;
-                return (
-                  <div key={d} onClick={() => setDur(d)} style={{ cursor: 'pointer', padding: '5px 14px', borderRadius: 99, fontSize: 12.5, background: active ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.22)', color: active ? (isDark ? T.leafDeep : T.tomato) : 'inherit', fontWeight: active ? 700 : 500 }}>{d} 分</div>
-                );
-              })}
-            </div>
+            {/* 时长由待办决定，不可更改（不再提供时长切换） */}
           </div>
 
           <div style={{ position: 'absolute', left: 24, right: 24, bottom: 30 }}>
@@ -1994,10 +1987,10 @@
       const [showComplete, setShowComplete] = useState(false);
       const [completedTask, setCompletedTask] = useState(null);
       const [tasks, setTasks] = useState([
-        { id: 1, title: '晨间阅读《心流》30 页', pomos: 1, done: true, difficulty: 'easy' },
-        { id: 2, title: '写本周工作周报', pomos: 2, done: false, difficulty: 'hard' },
-        { id: 3, title: '背 30 个英语单词', pomos: 1, done: false, difficulty: 'medium' },
-        { id: 4, title: '读《认知觉醒》第三章', pomos: 1, done: false, difficulty: 'medium' },
+        { id: 1, title: '晨间阅读《心流》30 页', pomos: 1, durationMin: 25, done: true, difficulty: 'easy' },
+        { id: 2, title: '写本周工作周报', pomos: 2, durationMin: 50, done: false, difficulty: 'hard' },
+        { id: 3, title: '背 30 个英语单词', pomos: 1, durationMin: 25, done: false, difficulty: 'medium' },
+        { id: 4, title: '读《认知觉醒》第三章', pomos: 1, durationMin: 25, done: false, difficulty: 'medium' },
       ]);
       const [newTitle, setNewTitle] = useState('');
       const [showAi, setShowAi] = useState(false);
