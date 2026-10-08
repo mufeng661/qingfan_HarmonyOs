@@ -1,6 +1,7 @@
 import { UserProfile, TaskItem, FocusRecord, BadgeItem, StudyRoom, DailyStats, ThemeKey, ThemeDef,
   themeOf, BADGE_CATALOG, Account } from './Types';
 import { Store, genId } from './Store';
+import { CloudDataService } from '../service/CloudDataService';
 
 const KEY_USER = 'qf_user';
 const KEY_ACCOUNT = 'qf_account';
@@ -98,6 +99,7 @@ export class AppState {
   static async loadBusinessData(): Promise<void> {
     const s = AppState.instance;
     if (AppState.isLoggedIn()) {
+      await AppState.pullCloud();
       s.tasks = await Store.getArr<TaskItem>(AppState.dk(KEY_TASKS));
       // 新账号：首次进入种入 4 条「引导待办」（只种一次，用户删光后不再重复）
       if (s.tasks.length === 0) {
@@ -128,6 +130,18 @@ export class AppState {
       s.roomFocus = {};
       s.badges = AppState.copyBadges(BADGE_CATALOG);
     }
+  }
+
+  // 供页面 onPageShow 调用：拉取云端并刷新实例（跨端实时同步）
+  static async syncFromCloud(): Promise<void> {
+    if (!AppState.isLoggedIn()) return;
+    await AppState.pullCloud();
+    const s = AppState.instance;
+    s.tasks = await Store.getArr<TaskItem>(AppState.dk(KEY_TASKS));
+    s.records = await Store.getArr<FocusRecord>(AppState.dk(KEY_RECORDS));
+    s.stats = await Store.getObj<Record<string, DailyStats>>(AppState.dk(KEY_STATS)) ?? {};
+    s.challengeGoal = await Store.getInt(AppState.dk(KEY_CHALLENGE_GOAL), 4);
+    s.badges = await Store.getArr<BadgeItem>(AppState.dk(KEY_BADGES));
   }
 
   private static copyBadges(src: BadgeItem[]): BadgeItem[] {
@@ -206,9 +220,66 @@ export class AppState {
   }
 
   // ============= 持久化封装 =============
+  // 从云端拉取账号数据（登录后）；云端有数据则覆盖本地缓存
+  private static async pullCloud(): Promise<void> {
+    try {
+      const cloud = await CloudDataService.pull(AppState.userKey());
+      if (cloud === null) return;
+      if (cloud.tasks !== undefined && cloud.tasks.length > 0) {
+        await Store.setArr(AppState.dk(KEY_TASKS), cloud.tasks as TaskItem[]);
+      }
+      if (cloud.records !== undefined && cloud.records.length > 0) {
+        await Store.setArr(AppState.dk(KEY_RECORDS), cloud.records as FocusRecord[]);
+      }
+      if (cloud.stats !== undefined && Object.keys(cloud.stats).length > 0) {
+        await Store.setObj(AppState.dk(KEY_STATS), cloud.stats as Record<string, DailyStats>);
+      }
+      const p = cloud.profile;
+      if (p !== undefined) {
+        const u = AppState.instance.user;
+        if (u !== null) {
+          if (p['level'] !== undefined) u.level = p['level'] as number;
+          if (p['exp'] !== undefined) u.exp = p['exp'] as number;
+          if (p['nextLevelExp'] !== undefined) u.nextLevelExp = p['nextLevelExp'] as number;
+          if (p['streak'] !== undefined) u.streak = p['streak'] as number;
+          if (p['lastSignDate'] !== undefined) u.lastSignDate = p['lastSignDate'] as string;
+          if (p['signDates'] !== undefined) u.signDates = p['signDates'] as string[];
+          await Store.setObj(KEY_USER, u);
+        }
+        if (p['challengeGoal'] !== undefined) {
+          AppState.instance.challengeGoal = p['challengeGoal'] as number;
+          Store.setInt(AppState.dk(KEY_CHALLENGE_GOAL), AppState.instance.challengeGoal);
+        }
+      }
+    } catch (e) {
+    }
+  }
+
+  // 推送资料（等级/经验/连续/签到/挑战目标）到云端
+  private static pushProfile(): void {
+    if (!AppState.isLoggedIn()) return;
+    const u = AppState.instance.user;
+    if (u === null) return;
+    const profile: Record<string, Object> = {};
+    profile['level'] = u.level;
+    profile['exp'] = u.exp;
+    profile['nextLevelExp'] = u.nextLevelExp;
+    profile['streak'] = u.streak;
+    profile['lastSignDate'] = u.lastSignDate;
+    profile['signDates'] = u.signDates;
+    profile['challengeGoal'] = AppState.instance.challengeGoal;
+    profile['nickname'] = u.nickname;
+    profile['avatarSeed'] = u.avatarSeed;
+    profile['bio'] = u.bio;
+    CloudDataService.saveProfile(AppState.userKey(), profile).catch((e: Object) => {
+      console.warn('saveProfile failed: ' + e);
+    });
+  }
+
   static async saveUser(): Promise<void> {
     if (AppState.instance.user) {
       await Store.setObj(KEY_USER, AppState.instance.user);
+      AppState.pushProfile();
     }
   }
 
@@ -229,14 +300,23 @@ export class AppState {
 
   static async saveTasks(): Promise<void> {
     await Store.setArr(AppState.dk(KEY_TASKS), AppState.instance.tasks);
+    if (AppState.isLoggedIn()) {
+      CloudDataService.saveTasks(AppState.userKey(), AppState.instance.tasks).catch((e: Object) => {});
+    }
   }
 
   static async saveRecords(): Promise<void> {
     await Store.setArr(AppState.dk(KEY_RECORDS), AppState.instance.records);
+    if (AppState.isLoggedIn()) {
+      CloudDataService.saveRecords(AppState.userKey(), AppState.instance.records).catch((e: Object) => {});
+    }
   }
 
   static async saveStats(): Promise<void> {
     await Store.setObj(AppState.dk(KEY_STATS), AppState.instance.stats);
+    if (AppState.isLoggedIn()) {
+      CloudDataService.saveStats(AppState.userKey(), AppState.instance.stats).catch((e: Object) => {});
+    }
   }
 
   static async saveBadges(): Promise<void> {
@@ -250,6 +330,7 @@ export class AppState {
   static async saveChallenge(): Promise<void> {
     await Store.setInt(AppState.dk(KEY_CHALLENGE_GOAL), AppState.instance.challengeGoal);
     await Store.setInt(AppState.dk(KEY_DONE_COUNT), AppState.instance.doneCountToday);
+    AppState.pushProfile();
   }
 
   static async saveTheme(): Promise<void> {

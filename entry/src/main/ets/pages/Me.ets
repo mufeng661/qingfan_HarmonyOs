@@ -58,18 +58,20 @@ struct Me {
   }
 
   onPageShow() {
-    this.syncUserState();
-    this.uiTick += 1;
+    AppState.syncFromCloud().then(() => {
+      this.syncUserState();
+      this.uiTick += 1;
+    });
   }
 
   onRefresh() {
     this.refreshing = true;
-    this.syncUserState();
-    this.uiTick += 1;
-    setTimeout(() => {
+    AppState.syncFromCloud().then(() => {
+      this.syncUserState();
+      this.uiTick += 1;
       this.refreshing = false;
       promptAction.showToast({ message: '已刷新', duration: 1200 });
-    }, 600);
+    });
   }
 
   syncUserState() {

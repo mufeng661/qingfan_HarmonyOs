@@ -79,9 +79,9 @@ struct Login {
       theme: AppState.instance.themeKey,
       notifyEnabled: true
     };
-    AppState.instance.user = u;
-    await AppState.saveUser();
-    await AppState.loadBusinessData();
+      AppState.instance.user = u;
+      await AppState.loadBusinessData();
+      await AppState.saveUser();
   }
 
   private async doLogin() {

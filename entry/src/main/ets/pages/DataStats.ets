@@ -43,7 +43,7 @@ struct DataStats {
   }
 
   onPageShow() {
-    this.redraw();
+    AppState.syncFromCloud().then(() => { this.redraw(); });
   }
 
   redraw() {

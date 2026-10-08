@@ -27,7 +27,7 @@ struct Stats {
   }
 
   onPageShow() {
-    this.refresh();
+    AppState.syncFromCloud().then(() => { this.refresh(); });
   }
 
   onRefresh() {

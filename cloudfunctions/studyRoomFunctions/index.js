@@ -3,6 +3,7 @@ const { hashPassword, verifyPassword } = require("./password");
 const { verifyToken } = require("./token");
 const auth = require("./auth");
 const ai = require("./ai");
+const data = require("./data");
 const { now, dateKeyOf, todayKey, dateKeyOffset, ok, fail, toPositiveInt, isValidRoomId, resolveRole, roleAdmin } = require("./utils");
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -674,7 +675,7 @@ async function commentAdd(params, ctx) {
           role,
           platform,
           likes: 0,
-          liked_by: [],
+          liked_by: "[]",
           is_deleted: 0,
           created_at: timestamp,
           updated_at: timestamp,
@@ -775,7 +776,7 @@ async function commentLike(params, ctx) {
   await run(
     db
       .from("comments_self")
-      .update({ likes, liked_by: likedBy, updated_at: now() })
+      .update({ likes, liked_by: JSON.stringify(likedBy), updated_at: now() })
       .eq("id", id)
       .eq("project_id", roomId)
   );
@@ -787,6 +788,12 @@ const handlers = {
   "auth.register": auth.register,
   "auth.login": auth.login,
   "auth.profile": auth.profile,
+  "data.pull": data.pull,
+  "data.saveTasks": data.saveTasks,
+  "data.saveStats": data.saveStats,
+  "data.saveProfile": data.saveProfile,
+  "data.saveRecords": data.saveRecords,
+  "data.addRecord": data.addRecord,
   "room.create": roomCreate,
   "room.join": roomJoin,
   "room.listMine": roomListMine,

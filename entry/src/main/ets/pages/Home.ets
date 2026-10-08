@@ -98,10 +98,13 @@ struct Home {
 
   onPageShow() {
     this.lastDayKey = todayKey();
-    this.refreshTodayStats();
-    this.refreshTasks();
-    this.syncUserState();
-    this.checkInvite();
+    AppState.syncFromCloud().then(() => {
+      this.refreshTodayStats();
+      this.refreshTasks();
+      this.syncUserState();
+      this.checkInvite();
+      this.uiTick += 1;
+    });
   }
 
   // 检测剪贴板里的自习室分享文案，命中则弹出「是否加入」
