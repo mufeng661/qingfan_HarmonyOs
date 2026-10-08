@@ -570,24 +570,26 @@ struct Focus {
           }
           .width(220).height(220)
 
-          // 时长切换胶囊
-          Row({ space: 8 }) {
-            ForEach(DURATIONS, (d: number) => {
-              Text(d + ' 分')
-                .fontSize(12.5)
-                .fontWeight(this.durationSec === d * 60 ? FontWeight.Bold : FontWeight.Medium)
-                .fontColor(this.durationSec === d * 60
-                  ? (this.isDark() ? themeOf(AppState.instance.themeKey).leafDeep : themeOf(AppState.instance.themeKey).tomato)
-                  : this.ink())
-                .padding({ left: 14, right: 14, top: 5, bottom: 5 })
-                .borderRadius(99)
-                .backgroundColor(this.durationSec === d * 60
-                  ? 'rgba(255,255,255,0.9)'
-                  : this.panelBg())
-                .onClick(() => { this.applyDuration(d); })
-            }, (d: number) => d + '')
+          // 时长切换胶囊：待办模式下时长由待办决定，不可更改；房间/自由模式可切换
+          if (this.taskId.length === 0) {
+            Row({ space: 8 }) {
+              ForEach(DURATIONS, (d: number) => {
+                Text(d + ' 分')
+                  .fontSize(12.5)
+                  .fontWeight(this.durationSec === d * 60 ? FontWeight.Bold : FontWeight.Medium)
+                  .fontColor(this.durationSec === d * 60
+                    ? (this.isDark() ? themeOf(AppState.instance.themeKey).leafDeep : themeOf(AppState.instance.themeKey).tomato)
+                    : this.ink())
+                  .padding({ left: 14, right: 14, top: 5, bottom: 5 })
+                  .borderRadius(99)
+                  .backgroundColor(this.durationSec === d * 60
+                    ? 'rgba(255,255,255,0.9)'
+                    : this.panelBg())
+                  .onClick(() => { this.applyDuration(d); })
+              }, (d: number) => d + '')
+            }
+            .margin({ top: 22 })
           }
-          .margin({ top: 22 })
 
           // 开始 / 暂停按钮
           Row({ space: 8 }) {
