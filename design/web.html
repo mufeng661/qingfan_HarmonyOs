@@ -158,6 +158,8 @@
     @keyframes wave { 0%,100% { transform: scaleY(0.5); } 50% { transform: scaleY(1); } }
     @keyframes leafSway { 0%,100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
     @keyframes confetti { 0% { transform: translateY(0) rotate(0); opacity: 1; } 100% { transform: translateY(-70px) rotate(40deg); opacity: 0; } }
+    /* 3D 奖章摆动：±30°、周期 3.5s（与鸿蒙端 CoinBadge 一致） */
+    @keyframes coinSwing { 0%,100% { transform: rotateY(-30deg); } 50% { transform: rotateY(30deg); } }
   </style>
 </head>
 <body>
@@ -1224,7 +1226,7 @@
           <div style={{ height: '100%', background: T.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 30px', textAlign: 'center' }}>
             <LeafLogo size={72} />
             <div className="serif" style={{ fontSize: 26, marginTop: 12 }}>青番</div>
-            <div className="serif" style={{ fontSize: 14, color: T.ink2, marginTop: 8 }}>把专注，种成一片森林</div>
+            <div className="serif" style={{ fontSize: 14, color: T.ink2, marginTop: 8 }}>把专注，种成一片番茄园</div>
             <div style={{ width: '100%', marginTop: 24, padding: 16, background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, textAlign: 'left' }}>
               {[['✅', '今日待办 + 专注计时', '无需登录，直接使用'], ['🔒', 'AI 智能助手', '登录后解锁'], ['🔒', '统计 / 自习室', '登录后解锁']].map(([ic, t, d], i) => (
                 <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0' }}>
@@ -1242,7 +1244,7 @@
       const expPct = Math.round(exp / expMax * 100);
       const tier = tierOfLevel(level);
       const [name, setName] = useState('林小满');
-      const [signature, setSignature] = useState('把专注，种成一片森林');
+      const [signature, setSignature] = useState('把专注，种成一片番茄园');
       const [editing, setEditing] = useState(false);
       const [nameDraft, setNameDraft] = useState(name);
       const [sigDraft, setSigDraft] = useState(signature);
@@ -1251,23 +1253,47 @@
       const [privacy, setPrivacy] = useState({ publicTime: true, showOnline: false });
       const [badgeDetail, setBadgeDetail] = useState(null);
       const [confirmLogout, setConfirmLogout] = useState(false);
+      const [feedbackText, setFeedbackText] = useState('');
+      const [feedbackContact, setFeedbackContact] = useState('');
+      const submitFeedback = () => {
+        if (!feedbackText.trim()) return;
+        setFeedbackText('');
+        setFeedbackContact('');
+        setSettings(null);
+      };
+      // 徽章口径（三端统一，对齐鸿蒙端 Types.BADGE_TIER_GOALS 与小程序端 badges）
+      // 稀有度阶段：0 未解锁 / 1 青铜 / 2 白银 / 3 黄金 / 4 钻石；达到第一档即解锁（青铜）。
+      // b1 连续签到天数 / b2 累计番茄个数 / b3 累计专注分钟 / b4 月度冠军次数
       const badges = [
-        { icon: I.flame, name: '连续 7 天', got: true, desc: '连续签到 7 天解锁' },
-        { icon: I.leaf, name: '森林新芽', got: true, desc: '种下第 1 棵树解锁' },
-        { icon: I.star, name: '专注达人', got: true, desc: '累计专注 100 小时解锁' },
-        { icon: I.trophy, name: '月度冠军', got: false, desc: '当月排行第 1 名解锁' },
+        { id: 'b1', icon: I.flame, name: '连续 7 天', desc: '连续签到 7 天解锁', value: 12, goals: [7, 14, 30, 60] },
+        { id: 'b2', icon: I.tomato, name: '番茄丰收', desc: '累计收获 10 个番茄解锁', value: 302, goals: [10, 50, 200, 500] },
+        { id: 'b3', icon: I.star, name: '专注达人', desc: '累计专注 100 小时解锁', value: 7560, goals: [6000, 12000, 30000, 60000] },
+        { id: 'b4', icon: I.trophy, name: '月度冠军', desc: '当月排行第 1 名解锁', value: 0, goals: [1, 2, 3, 5] },
       ];
+      const TIER_NAMES = ['未解锁', '青铜', '白银', '黄金', '钻石'];
+      // 奖章材质：与鸿蒙端 CoinBadge / 小程序端徽章墙同一套配色（正面 / 侧面厚度带）
+      const TIER_FACE = ['#D5D9DE', '#CE9367', '#DDE2E9', '#F3CB5C', '#8ED9EC'];
+      const TIER_SIDE = ['#9BA1A9', '#8F5A31', '#98A1AC', '#BE8F1E', '#3F97B2'];
+      const tierOfBadge = (b) => { let t = 0; b.goals.forEach((g, i) => { if (b.value >= g) t = i + 1; }); return t; };
+      // 昵称 / 个性签名规格（与鸿蒙端 MAX_NICK / MAX_BIO 一致）：按「码点」计数与截断，
+      // emoji、生僻字都算 1 个字符，且不会把 emoji 劈成半个代理对（出现 � 乱码）。
+      const MAX_NICK = 12, MAX_BIO = 30;
+      const cpLen = (s) => Array.from(String(s == null ? '' : s)).length;
+      const cpCut = (s, n) => { const a = Array.from(String(s == null ? '' : s)); return a.length <= n ? a.join('') : a.slice(0, n).join(''); };
       const settingsItems = [
         { key: 'account', icon: I.user, label: '账号与安全', desc: '手机号 138****6688' },
         { key: 'notify', icon: I.bird, label: '消息提醒', desc: '专注、签到提醒' },
         { key: 'privacy', icon: I.mute, label: '隐私设置', desc: '公开时长、在线状态' },
+        { key: 'feedback', icon: () => <span style={{ fontSize: 17 }}>💬</span>, label: '意见反馈', desc: '说说你的建议或遇到的问题' },
         { key: 'about', icon: I.leaf, label: '关于青番', desc: 'v1.0.0 · AI 番茄钟' },
       ];
       const settingsMeta = {
         account: { title: '账号与安全' },
         notify: { title: '消息提醒' },
         privacy: { title: '隐私设置' },
+        feedback: { title: '意见反馈' },
         about: { title: '关于青番' },
+        agreement: { title: '用户协议与隐私政策' },
       };
       const themeOptions = [
         { key: 'green', label: '青番绿', icon: I.leaf, c1: '#6E9B57', c2: '#F3F6EE' },
@@ -1314,31 +1340,31 @@
             <span style={{ fontSize: 13, color: signed ? T.ink3 : T.tomato, fontWeight: 700 }}>{signed ? '✓' : '签到'}</span>
           </div>
 
-          {/* 我的森林 */}
+          {/* 我的番茄园（每 10 个番茄种 1 棵；等级按累计收获，三端统一口径） */}
           <div style={{ padding: '16px 18px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, marginBottom: 16 }}>
             {(() => {
-              const forestLevel = trees < 5 ? { name: '小树苗', bg: '#E8F0E3', color: '#6E9B57', next: 5 }
-                : trees < 15 ? { name: '青葱密林', bg: '#F4E8CE', color: '#D9A441', next: 15 }
-                : trees < 30 ? { name: '古老森林', bg: '#DCE8CF', color: '#2C3A28', next: 30 }
-                : { name: '梦幻森林', bg: '#EDE3F0', color: '#8B6E9B', next: null };
-              const nextName = trees < 5 ? '青葱密林' : trees < 15 ? '古老森林' : '梦幻森林';
+              const tomatoLevel = trees < 10 ? { name: '番茄幼苗', next: 10 }
+                : trees < 50 ? { name: '小番茄园', next: 50 }
+                : trees < 150 ? { name: '茂盛番茄园', next: 150 }
+                : { name: '番茄农场', next: null };
+              const nextName = trees < 10 ? '小番茄园' : trees < 50 ? '茂盛番茄园' : '番茄农场';
               return (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span className="serif" style={{ fontSize: 16 }}>我的森林</span>
-                      <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, background: forestLevel.bg, color: forestLevel.color, fontWeight: 600 }}>{forestLevel.name}</span>
+                      <span className="serif" style={{ fontSize: 16 }}>我的番茄园</span>
+                      <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, background: T.tomatoSoft, color: T.tomato, fontWeight: 600 }}>{tomatoLevel.name}</span>
                     </div>
-                    <span style={{ fontSize: 11, color: T.ink3 }}>已种 {trees} 棵 · 枯萎 {withered} 棵</span>
+                    <span style={{ fontSize: 11, color: T.ink3 }}>已种植 {trees} 棵 · 枯萎 {withered} 棵</span>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                     {Array.from({ length: trees }).map((_, i) => (
-                      <div key={'t' + i} style={{ width: 50, height: 50, borderRadius: 14, background: T.leafSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.leafDeep }}>{I.tree(26)}</div>
+                      <div key={'t' + i} style={{ width: 50, height: 50, borderRadius: 14, background: T.tomatoSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.tomato }}>{I.tomato(26)}</div>
                     ))}
                     {Array.from({ length: withered }).map((_, i) => (
                       <div key={'w' + i} onClick={onRevive} style={{ cursor: 'pointer', width: 50, height: 50, borderRadius: 14, background: T.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.ink3, opacity: 0.75, position: 'relative' }}>
-                        {I.tree(26)}
-                        <div style={{ position: 'absolute', bottom: 3, right: 4, fontSize: 9, color: T.tomato, fontWeight: 700 }}>50</div>
+                        {I.tomato(26)}
+                        <div style={{ position: 'absolute', bottom: 2, right: 4, fontSize: 9, color: T.tomato, fontWeight: 700 }}>×2</div>
                       </div>
                     ))}
                     {Array.from({ length: Math.max(0, 8 - trees - withered) }).map((_, i) => (
@@ -1346,8 +1372,8 @@
                     ))}
                   </div>
                   <div style={{ fontSize: 11, color: T.ink3, marginTop: 10 }}>
-                    {forestLevel.next ? `再种 ${forestLevel.next - trees} 棵升级到「${nextName}」` : '你的森林已达最高等级，继续种下去吧！'}
-                    {withered > 0 ? ' · 点击枯萎树消耗 50 经验复活' : ''}
+                    {tomatoLevel.next ? `再收获 ${tomatoLevel.next - trees} 个番茄，升级到「${nextName}」` : '你的番茄园已达最高等级，继续种下去吧！'}
+                    {withered > 0 ? ' · 点击枯萎番茄消耗 2 个专注番茄清除' : ''}
                   </div>
                 </>
               );
@@ -1381,18 +1407,26 @@
             </div>
           </div>
 
-          {/* 徽章 */}
-          <div className="serif" style={{ fontSize: 16, marginBottom: 12 }}>我的徽章</div>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-            {badges.map((b, i) => (
-              <div key={i} onClick={() => setBadgeDetail(b)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: '16px 0', background: T.surface, borderRadius: 16, border: `1px solid ${T.line}`, opacity: b.got ? 1 : 0.5, cursor: 'pointer', position: 'relative' }}>
-                <div style={{ color: b.got ? (b.icon === I.flame ? T.tomato : T.leafDeep) : T.ink3, position: 'relative' }}>
-                  {b.icon(24)}
-                  {!b.got && <span style={{ position: 'absolute', right: -7, bottom: -7, color: T.ink3 }}>{I.lock(12)}</span>}
+          {/* 我的徽章（三端统一：按稀有度材质上色，点开看 3D 奖章与升阶进度） */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+            <span className="serif" style={{ fontSize: 16 }}>我的徽章</span>
+            <span style={{ fontSize: 11, color: T.ink3 }}>已解锁 {badges.filter(b => tierOfBadge(b) > 0).length} / {badges.length}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+            {badges.map((b) => {
+              const t = tierOfBadge(b);
+              const face = TIER_FACE[t], side = TIER_SIDE[t];
+              return (
+                <div key={b.id} onClick={() => setBadgeDetail(b)} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '14px 0 11px', background: T.surface, borderRadius: 16, border: `1px solid ${t > 0 ? side + '55' : T.line}`, cursor: 'pointer', position: 'relative' }}>
+                  <div style={{ width: 42, height: 42, borderRadius: '50%', background: `radial-gradient(circle at 34% 28%, #FFFFFF, ${face})`, border: `2px solid ${side}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t > 0 ? side : T.ink3, boxShadow: t > 0 ? `0 4px 12px ${side}44` : 'none' }}>
+                    {b.icon(20)}
+                  </div>
+                  <span style={{ fontSize: 11, color: t > 0 ? T.ink2 : T.ink3, whiteSpace: 'nowrap' }}>{b.name}</span>
+                  <span style={{ fontSize: 9.5, padding: '1px 7px', borderRadius: 99, background: t > 0 ? face + '55' : T.surface2, color: t > 0 ? side : T.ink3, fontWeight: 600 }}>{TIER_NAMES[t]}</span>
+                  {t === 0 && <span style={{ position: 'absolute', right: 7, top: 7, color: T.ink3 }}>{I.lock(12)}</span>}
                 </div>
-                <span style={{ fontSize: 11, color: T.ink2 }}>{b.name}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* 累计数据 */}
@@ -1468,10 +1502,16 @@
           {editing && (
             <Modal onClose={() => setEditing(false)} width={290}>
               <div className="serif" style={{ fontSize: 17, marginBottom: 14 }}>编辑资料</div>
-              <div style={{ fontSize: 12, color: T.ink3, marginBottom: 5 }}>昵称</div>
-              <input value={nameDraft} onChange={e => setNameDraft(e.target.value)} placeholder="你的昵称" style={{ width: '100%', padding: '11px 13px', borderRadius: 11, border: `1px solid ${T.line}`, fontSize: 14, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box' }} />
-              <div style={{ fontSize: 12, color: T.ink3, margin: '12px 0 5px' }}>个性签名</div>
-              <input value={sigDraft} onChange={e => setSigDraft(e.target.value)} placeholder="写一句鼓励自己的话" style={{ width: '100%', padding: '11px 13px', borderRadius: 11, border: `1px solid ${T.line}`, fontSize: 14, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
+                <span style={{ fontSize: 12, color: T.ink3 }}>昵称</span>
+                <span style={{ fontSize: 11, color: cpLen(nameDraft) >= MAX_NICK ? T.tomato : T.ink3 }}>{cpLen(nameDraft)} / {MAX_NICK}</span>
+              </div>
+              <input value={nameDraft} onChange={e => setNameDraft(cpCut(e.target.value, MAX_NICK))} placeholder="你的昵称" style={{ width: '100%', padding: '11px 13px', borderRadius: 11, border: `1px solid ${T.line}`, fontSize: 14, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', margin: '12px 0 5px' }}>
+                <span style={{ fontSize: 12, color: T.ink3 }}>个性签名</span>
+                <span style={{ fontSize: 11, color: cpLen(sigDraft) >= MAX_BIO ? T.tomato : T.ink3 }}>{cpLen(sigDraft)} / {MAX_BIO}</span>
+              </div>
+              <input value={sigDraft} onChange={e => setSigDraft(cpCut(e.target.value, MAX_BIO))} placeholder="写一句鼓励自己的话" style={{ width: '100%', padding: '11px 13px', borderRadius: 11, border: `1px solid ${T.line}`, fontSize: 14, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box' }} />
               <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
                 <div onClick={() => setEditing(false)} style={{ flex: 1, padding: '11px', borderRadius: 12, border: `1px solid ${T.line}`, color: T.ink2, fontSize: 14, cursor: 'pointer', textAlign: 'center' }}>取消</div>
                 <div onClick={saveProfile} style={{ flex: 1, padding: '11px', borderRadius: 12, background: T.leaf, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>保存</div>
@@ -1527,30 +1567,78 @@
                   ))}
                 </div>
               )}
+              {settings === 'feedback' && (
+                <div>
+                  <textarea value={feedbackText} onChange={e => setFeedbackText(e.target.value)} placeholder="说说你的建议或遇到的问题…" rows={5} style={{ width: '100%', padding: '12px 13px', borderRadius: 12, border: `1px solid ${T.line}`, fontSize: 13.5, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box', resize: 'none' }} />
+                  <input value={feedbackContact} onChange={e => setFeedbackContact(e.target.value)} placeholder="联系方式（选填）" style={{ width: '100%', marginTop: 10, padding: '12px 13px', borderRadius: 12, border: `1px solid ${T.line}`, fontSize: 13.5, fontFamily: T.body, color: T.ink, outline: 'none', background: T.surface2, boxSizing: 'border-box' }} />
+                  <div onClick={submitFeedback} style={{ marginTop: 14, padding: '13px', borderRadius: 14, background: T.leaf, color: '#fff', fontSize: 15, textAlign: 'center', fontWeight: 600, cursor: 'pointer' }}>提交反馈</div>
+                  <div style={{ fontSize: 11, color: T.ink3, marginTop: 12 }}>感谢你的反馈，我们会认真对待每一条建议。</div>
+                </div>
+              )}
+              {settings === 'agreement' && (
+                <div style={{ maxHeight: 330, overflow: 'auto', fontSize: 12.5, color: T.ink2, lineHeight: 1.85 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: T.ink, marginBottom: 6 }}>一、服务内容</div>
+                  青番提供番茄专注计时、待办管理、自习室与专注数据统计等服务。
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: T.ink, margin: '12px 0 6px' }}>二、账号与数据</div>
+                  手机号仅用于账号识别与数据同步；待办、专注记录等成长数据按账号隔离存储，退出登录不会删除。
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: T.ink, margin: '12px 0 6px' }}>三、隐私说明</div>
+                  我们不会向第三方出售你的个人信息；自习室内的昵称、专注时长对同一房间成员可见。
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: T.ink, margin: '12px 0 6px' }}>四、用户责任</div>
+                  请勿发布违法违规内容，共同维护良好的自习氛围。
+                </div>
+              )}
               {settings === 'about' && (
                 <div style={{ textAlign: 'center', paddingTop: 4 }}>
                   <LeafLogo size={64} />
                   <div className="serif" style={{ fontSize: 20, marginTop: 10 }}>青番</div>
                   <div style={{ fontSize: 12, color: T.ink3, marginTop: 4 }}>v1.0.0 · AI 番茄钟智能助手</div>
-                  <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.7, marginTop: 14 }}>把专注，种成一片森林。<br />一款会陪你成长的专注工具。</div>
+                  <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.7, marginTop: 14 }}>把专注，种成一片番茄园。<br />一款会陪你成长的专注工具。</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 16, fontSize: 12 }}>
+                    <span onClick={() => setSettings('agreement')} style={{ color: T.leafDeep, fontWeight: 600, cursor: 'pointer' }}>用户协议</span>
+                    <span onClick={() => setSettings('agreement')} style={{ color: T.leafDeep, fontWeight: 600, cursor: 'pointer' }}>隐私政策</span>
+                  </div>
                   <div style={{ fontSize: 11, color: T.ink3, marginTop: 14 }}>© 2026 青番团队</div>
                 </div>
               )}
             </Modal>
           )}
 
-          {/* 徽章详情弹窗 */}
-          {badgeDetail && (
-            <Modal onClose={() => setBadgeDetail(null)} width={280}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ width: 56, height: 56, borderRadius: 18, background: badgeDetail.got ? T.goldSoft : T.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', color: badgeDetail.got ? (badgeDetail.icon === I.flame ? T.tomato : T.gold) : T.ink3, margin: '0 auto' }}>{badgeDetail.icon(30)}</div>
-                <div className="serif" style={{ fontSize: 18, marginTop: 12 }}>{badgeDetail.name}</div>
-                <div style={{ fontSize: 12, color: badgeDetail.got ? T.ink2 : T.ink3, marginTop: 6, lineHeight: 1.6 }}>{badgeDetail.desc}</div>
-                <div style={{ marginTop: 16, padding: '10px', borderRadius: 12, background: badgeDetail.got ? T.leafSoft : T.surface2, color: badgeDetail.got ? T.leafDeep : T.ink3, fontSize: 12.5, fontWeight: 600 }}>{badgeDetail.got ? '已获得' : '未解锁'}</div>
-                <div onClick={() => setBadgeDetail(null)} style={{ marginTop: 16, padding: '11px', borderRadius: 12, background: T.leaf, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>知道了</div>
-              </div>
-            </Modal>
-          )}
+          {/* 徽章详情弹窗：3D 奖章（材质硬币自动摆动 ±30°；阶段名 + 升阶进度） */}
+          {badgeDetail && (() => {
+            const t = tierOfBadge(badgeDetail);
+            const face = TIER_FACE[t], side = TIER_SIDE[t];
+            const nextGoal = badgeDetail.goals[t] ?? 0;
+            const prevGoal = t > 0 ? badgeDetail.goals[t - 1] : 0;
+            const pct = nextGoal > 0 ? Math.min(100, Math.max(0, Math.round((badgeDetail.value - prevGoal) / (nextGoal - prevGoal) * 100))) : 100;
+            return (
+              <Modal onClose={() => setBadgeDetail(null)} width={280}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ perspective: 600 }}>
+                    <div style={{ width: 96, height: 96, position: 'relative', margin: '0 auto', animation: 'coinSwing 3.5s ease-in-out infinite', transformStyle: 'preserve-3d' }}>
+                      <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: side, transform: 'translateX(5px)' }} />
+                      <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: `2px solid ${side}`, background: `conic-gradient(${face} 0 25%, ${side} 0 50%, ${face} 0 75%, ${side} 0)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: '72%', height: '72%', borderRadius: '50%', background: 'radial-gradient(circle at 32% 26%, #FFFFFF, #F1ECDD)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: side, boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.14)' }}>
+                          {badgeDetail.icon(28)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="serif" style={{ fontSize: 18, marginTop: 14 }}>{badgeDetail.name}</div>
+                  <div style={{ fontSize: 12, color: T.ink3, marginTop: 5 }}>{badgeDetail.desc}</div>
+                  <div style={{ display: 'inline-block', marginTop: 10, fontSize: 11.5, padding: '3px 12px', borderRadius: 99, background: t > 0 ? face + '66' : T.surface2, color: t > 0 ? side : T.ink3, fontWeight: 600 }}>{TIER_NAMES[t]}</div>
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ height: 8, borderRadius: 99, background: T.surface2, overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, ${face}, ${side})`, borderRadius: 99, transition: 'width 0.5s' }} />
+                    </div>
+                    <div style={{ fontSize: 11, color: T.ink3, marginTop: 7 }}>
+                      {nextGoal > 0 ? `再积累 ${nextGoal - badgeDetail.value}，升到「${TIER_NAMES[t + 1]}」` : '已是最高等级 · 钻石'}
+                    </div>
+                  </div>
+                  <div onClick={() => setBadgeDetail(null)} style={{ marginTop: 16, padding: '11px', borderRadius: 12, background: T.leaf, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>知道了</div>
+                </div>
+              </Modal>
+            );
+          })()}
 
           {/* 退出登录确认弹窗 */}
           {confirmLogout && (
@@ -1940,7 +2028,7 @@
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 14, flex: 1 }}>
               <div style={{ flex: 1, background: T.surface2, borderRadius: 13, padding: '10px 11px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: T.leafDeep }}>{I.tree(14)}<span style={{ fontSize: 10.5, color: T.ink2 }}>森林</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: T.tomato }}>{I.tomato(14)}<span style={{ fontSize: 10.5, color: T.ink2 }}>番茄园</span></div>
                 <div className="serif" style={{ fontSize: 18, color: T.ink }}>{trees}<span style={{ fontSize: 10, color: T.ink3 }}> 棵</span></div>
               </div>
               <div style={{ flex: 1, background: T.surface2, borderRadius: 13, padding: '10px 11px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5 }}>
@@ -2043,8 +2131,8 @@
       const [signed, setSigned] = useState(false);
       const [exp, setExp] = useState(150);
       const [level, setLevel] = useState(3);
-      const [trees, setTrees] = useState(5);       // 已种下的树
-      const [withered, setWithered] = useState(1);  // 中断而枯萎的树
+      const [trees, setTrees] = useState(5);        // 番茄园已收获的棵数（每 10 个番茄种 1 棵）
+      const [withered, setWithered] = useState(1);  // 中断而枯萎的番茄棵数
       const [streakDays, setStreakDays] = useState(12); // 连续签到天数
       const [challengeGoal, setChallengeGoal] = useState(4); // 每日挑战目标番茄数（可自定义）
       const [showGoalPicker, setShowGoalPicker] = useState(false);
@@ -2146,14 +2234,11 @@
         });
         setTrees(t => t + 1);
       };
-      const handleQuit = () => { setWithered(w => w + 1); showToast('专注中断，小树苗枯萎了', I.tree(15, T.tomato)); setAppState('main'); setFocusTask(null); };
+      const handleQuit = () => { setWithered(w => w + 1); showToast('专注中断，番茄枯萎了', I.tomato(15, T.tomato)); setAppState('main'); setFocusTask(null); };
       const handleRevive = () => {
-        if (exp < 50) { showToast('经验不足，再专注几次来复活它吧', I.tree(15, T.ink3)); return; }
         if (withered <= 0) return;
         setWithered(w => w - 1);
-        setTrees(t => t + 1);
-        setExp(e => e - 50);
-        showToast('成功复活 1 棵树，森林又绿了', I.leaf(15));
+        showToast('已清除 1 棵枯萎番茄（消耗 2 个专注番茄）', I.tomato(15));
       };
       const handleCompleteClose = () => { setShowComplete(false); setAppState('main'); setFocusTask(null); };
       const handleLogout = () => { setLoggedIn(false); setTab('home'); setAppState('main'); };
@@ -2199,7 +2284,7 @@
         { name: '时间轴 · 完成记录', active: tab === 'timeline' },
         { name: '签到 · 经验值 · 等级', active: tab === 'me' },
         { name: '连续签到打卡日历', active: tab === 'me' },
-        { name: '专注森林 · 种树激励', active: tab === 'me' },
+        { name: '番茄园 · 收获激励', active: tab === 'me' },
         { name: '自习室 · 加入码 / 成员排行', active: tab === 'study' },
         { name: 'AI 智能助手', active: showAi },
         { name: '背景主题切换', active: tab === 'me' },
@@ -2216,7 +2301,7 @@
                 <div className="en">QINGFAN · AI POMODORO</div>
               </div>
             </div>
-            <div className="stage-tagline">把专注，种成一片森林。<br />一款会陪你成长的 AI 番茄钟智能助手。<br /><b style={{ color: T.leafDeep }}>Web 端原型</b>（功能与鸿蒙端一致）</div>
+            <div className="stage-tagline">把专注，种成一片番茄园。<br />一款会陪你成长的 AI 番茄钟智能助手。<br /><b style={{ color: T.leafDeep }}>Web 端原型</b>（功能与鸿蒙端一致）</div>
             <div className="stage-modules">
               <div className="title">功能模块</div>
               {modules.map((m, i) => (
@@ -2228,7 +2313,7 @@
               ))}
             </div>
             <div className="stage-hint">
-              <b>Web 端操作提示</b><br />开场引导看「为什么选青番」· 访客可直接用待办与计时；登录后解锁 AI / 统计 / 自习室 · 首页看「今日挑战」进度，点「调整」自定义目标 · 「我的」看森林与打卡、切换主题 · 长按待办拖动排序 · 点 AI 卡片进助手 · 自习室可创建/按房间号加入并留言。
+              <b>Web 端操作提示</b><br />开场引导看「为什么选青番」· 访客可直接用待办与计时；登录后解锁 AI / 统计 / 自习室 · 首页看「今日挑战」进度，点「调整」自定义目标 · 「我的」看番茄园与打卡、徽章墙（点开看 3D 奖章）、切换主题 · 长按待办拖动排序 · 点 AI 卡片进助手 · 自习室可创建/按房间号加入并留言。
             </div>
           </div>
 
@@ -2311,7 +2396,7 @@
                       <div style={{ display: 'flex', justifyContent: 'center', gap: 12, margin: '14px 0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: T.ink2 }}>{I.flame(15, T.tomato)} 番茄 +1</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: T.ink2 }}>{I.star(15, T.gold)} 经验 +{completedTask ? completedTask.pomos * 20 : 0}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: T.leafDeep }}>{I.tree(15)} 种下 1 棵树</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: T.leafDeep }}>{I.tomato(15)} 番茄园进度 +1</div>
                       </div>
                       <div onClick={handleCompleteClose} style={{ padding: '12px', borderRadius: 13, background: T.leaf, color: '#fff', fontSize: 14, cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}>太棒了</div>
                     </div>

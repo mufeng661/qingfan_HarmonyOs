@@ -4,7 +4,7 @@
 
 ```
 pages/       页面（@Entry 组件，负责 UI 与交互编排）
-components/  复用组件（TabBar 底部导航）
+components/  复用组件（TabBar 底部导航、BadgeIcon 徽章图形、CoinBadge 3D 奖章）
 service/     云函数客户端（CloudFnService 通用调用 + Auth/Room/Comment 领域封装）
 model/       数据与状态（Types 类型与令牌、AppState 全局状态、Store 持久化、CloudBase 云配置）
 widget/      桌面卡片（FormExtensionAbility + ArkUI 渲染）
@@ -22,6 +22,10 @@ widget/      桌面卡片（FormExtensionAbility + ArkUI 渲染）
   - 未登录点「时间轴 / 数据 / 自习室」→ 提示并跳「我的」。
 - 页面跳转：`router.pushUrl`（详情类）/ `replaceUrl`（Tab 与完成页）/ `back`（返回）。
 - 登录页从「我的」`pushUrl` 进入，登录成功 `router.back()` 返回。
+- 设置类子页：`About` / `Agreement` / `Feedback` 从「我的 → 设置」`pushUrl` 进入，返回用 `router.back()`。
+- **桌面卡片点击**：整卡 `Stack.onClick` → `postCardAction({ action:'router', abilityName:'EntryAbility', params:{ qfPage:'pages/Home' } })`。
+  两条落地路径都在 `EntryAbility` 处理：冷启动 `onCreate` → 写 `AppStorage('qfLaunchTarget')`（`pages/Index` 决定首屏，**读后即 `AppStorage.delete`**）；
+  热启动 `onNewWant` → `windowStage.getMainWindowSync().getUIContext().getRouter().pushUrl()`（`getState().path` 已是目标页则跳过，避免重复压栈）。
 
 ## 3. 状态与数据流
 
@@ -56,7 +60,12 @@ UI(page) ──调用──▶ service ──HTTP──▶ CloudBase 云函数 s
 ## 5. 关键机制
 
 - **签到与连续**：`AppState.signInToday()`（写 `signDates`、发经验、`recomputeStreak()`）；`computeStreak()` = 从今天往前连续满足「已签到 且 专注≥10 分钟」；Home/Me 用定时器每 30s 检测跨天刷新。
-- **番茄 → 树**：`Me.trees() = floor(累计番茄/10) + bonusTrees`。
+- **番茄 → 番茄园**：`AppState.tomatoStats()` —— `harvested = floor(累计番茄 / POMODOROS_PER_TOMATO) + bonus`、
+  `dead = 枯萎总数 - cleared`、`focusAvailable = max(0, 累计番茄 - cleared × 2)`；等级取 `TOMATO_LEVELS` 中 `harvested` 不超过的最大档位。
+  清除 1 棵枯萎番茄（`tomatoCleared + 1`）消耗 2 个专注番茄。
+- **等级 / 经验**：`expForLevel(level) = 200 + (level - 1) × 100`（语义：当前等级 → 下一级所需）；`gainExp()` 循环进位；
+  `normalizeLevel()` 幂等归一旧存档（按进度百分比折算，等级不变）。三端同一条公式。
+- **徽章**：`AppState.recalcBadges()` 按 `BADGE_TIER_GOALS`（b1 连续天数 / b2 累计番茄 / b3 累计专注分钟 / b4 月度冠军次数）算出 0~4 稀有度，达到第一档即解锁。
 - **专注完成**：
   - 待办模式 → 记录统计/经验 → `Complete` 庆祝 → 首页；
   - 自习室模式 → 记录统计/经验 + 本地累计房间时长（并尝试上报 `focus.record`）→ 弹窗「是否继续专注」：是则留在计时页、否则返回自习室。
@@ -68,6 +77,8 @@ UI(page) ──调用──▶ service ──HTTP──▶ CloudBase 云函数 s
 | 文件 | 职责 |
 |---|---|
 | `components/TabBar.ets` | 底部 4 标签导航 + 登录拦截 |
+| `components/BadgeIcon.ets` | 线性描边徽章图标（按 `iconKey` 取形，跨端一致） |
+| `components/CoinBadge.ets` | 3D 奖章（风车环 + 白币心 + 中心图标；±30° 摆动）；材质按稀有度 0~4 |
 | `service/CloudFnService.ets` | 通用云函数调用（拼 body/头、解析响应） |
 | `service/CloudAuthService.ets` | 注册 / 登录 |
 | `service/CloudRoomService.ets` | 房间增删查改、加入/退出、（预留）上报专注 |
@@ -75,7 +86,7 @@ UI(page) ──调用──▶ service ──HTTP──▶ CloudBase 云函数 s
 | `model/AppState.ets` | 全局状态、账号隔离读写、签到/连续、番茄→树 |
 | `model/Store.ets` | Preferences 封装 + 格式化工具 |
 | `model/CloudBase.ets` | 云函数地址与平台标识（不含密钥） |
-| `widget/*` | 桌面卡片三种尺寸 |
+| `widget/*` | 桌面卡片（2×2 / 2×4；`QfWidgetAbility` 供数 + `WidgetCard` 渲染） |
 
 ## 7. 三端架构（互通）
 
@@ -88,7 +99,7 @@ UI(page) ──调用──▶ service ──HTTP──▶ CloudBase 云函数 s
         ┌──────────────────────────────────────────────────┐
         │  CloudBase 云函数 studyRoomFunctions              │
         │  env: cloud1-d5g8q89yd66340db4 (MySQL)           │
-        │  actions: auth.* / room.* / comment.*            │
+        │  actions: auth.* / room.* / comment.* / data.* / ai.* │
         └──────────────────────────────────────────────────┘
                  rooms_self / room_members_self / comments_self
 ```

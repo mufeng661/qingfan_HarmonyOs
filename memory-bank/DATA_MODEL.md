@@ -8,17 +8,20 @@
 UserProfile {
   id, phone, nickname, avatarSeed, bio,
   level, exp, nextLevelExp, streak, lastSignDate,
-  signDates: string[], theme: ThemeKey, notifyEnabled, bonusTrees?
+  signDates: string[], theme: ThemeKey, notifyEnabled, bonusTrees?, tomatoCleared?
 }
 TaskItem   { id, title, durationMin, status:'todo'|'done', difficulty:'easy'|'medium'|'hard', order, createdAt, bgSeed }
 FocusRecord{ id, taskId, taskTitle, startAt, endAt, durationSec, finished, interruptReason, backgroundKey, whiteNoise, roomId }
-BadgeItem  { id, name, desc, icon, unlocked, unlockedAt }
+BadgeItem  { id, name, desc, icon, iconKey, unlocked, unlockedAt, tier }   // tier 0~4 = 未解锁/青铜/白银/黄金/钻石
+TomatoStats{ pomo, harvested, alive, dead, cleared, focusAvailable, level, nextAt, pct }
 StudyRoom  { id, name, theme, hostId, members, onlineCount, hotScore, todayMinutes, events, joined }  // 旧模型，已被云房间取代
 DailyStats { date, focusMinutes, pomodoroCount, doneTaskCount, interruptCounts: Record<string,number> }
 ThemeDef   { key, name, desc, bg, surface, surface2, ink, ink2, ink3, leaf, leafDeep, leafSoft, tomato, tomatoSoft, line, gold, goldSoft, brandGrad1/2, bar, ... }
 ```
 
-常量：`THEMES`（4 主题）、`BACKGROUNDS`（天空/晨雾/夕阳）、`WHITE_NOISES`（森林/雨声/海浪/静音）、`DURATIONS`（25/15/5/1）、`INTERRUPT_REASONS`、`BADGE_CATALOG`、`FRIEND_RANK`。
+常量：`THEMES`（4 主题）、`BACKGROUNDS`（天空/晨雾/夕阳）、`WHITE_NOISES`（森林/雨声/海浪/静音）、`DURATIONS`（25/15/5/1）、`INTERRUPT_REASONS`、`FRIEND_RANK`。
+
+成长体系常量：`expForLevel()` / `LEVEL_TIERS`（6 段称号）、`BADGE_CATALOG` / `BADGE_TIER_NAMES` / `BADGE_TIER_GOALS`、`POMODOROS_PER_TOMATO` / `TOMATO_LEVELS` / `TomatoStats`、`MAX_NICK` / `MAX_BIO`。
 
 ## 2. 本地存储（`model/Store.ets` + `model/AppState.ets`）
 
@@ -35,6 +38,7 @@ Preferences 库名 `qf_store`。**业务数据按账号隔离**：key = `基础k
 | `qf_badges` | 徽章 | 是 |
 | `qf_challenge_goal` / `qf_done_count` | 每日挑战目标 / 今日完成数 | 是 |
 | `qf_room_focus` | 本人各房间专注时长（分钟） | 是 |
+| `qf_feedback_<userKey>` | 意见反馈（内容 + 联系方式 + 时间戳，数组） | 是 |
 | `qf_account` | 旧本地账号（已弃用，登录改走云函数） | 否 |
 
 ## 3. 云端数据（CloudBase · env `cloud1-d5g8q89yd66340db4`）
@@ -63,6 +67,12 @@ Preferences 库名 `qf_store`。**业务数据按账号隔离**：key = `基础k
 | `comment.delete` | `{ roomId, id }` | — |
 | `ai.chat` | `{ messages:[{role,content}], prompt?, context?, wantPlan? }` | `{ reply, todos?: AiTodo[] }` |
 | `ai.insight` | `{ prompt?, context? }` | `{ reply }` |
+| `data.pull` | `{}` | `{ profile, tasks, stats, records }`（该用户在 `user_data_self` 的整行） |
+| `data.saveProfile` | `{ profile }` | `{}`（**字段级合并**：`Object.assign(prev, patch)`，避免后写端抹掉别端字段） |
+| `data.saveTasks` | `{ tasks }` | `{}` |
+| `data.saveStats` | `{ stats }` | `{}` |
+| `data.saveRecords` | `{ records }` | `{}` |
+| `data.addRecord` | `{ record }` | `{ count }` |
 
 公共字段：请求体带 `action` / `userId` / `platform:'harmony'`，请求头 `x-user-id` / `x-user-platform`。
 
@@ -78,6 +88,7 @@ AiTodo     { title:string, durationMin:number, difficulty:'easy'|'medium'|'hard'
 - `rooms_self`：房间（`id` bigint 自增 PK / `room_no` 6 位唯一（对外即 `Room.id`）/ `join_code` 8 位唯一加入码 / `daily_min` 每日最低专注分钟（0=不设限）/ name / owner_id / password_* / is_deleted / created_at / updated_at）。**创建时生成 `room_no` 与 `join_code`**。
 - `room_members_self`：房间成员（`room_id` char(6)=房间号 / user_id / role / joined_at / updated_at / last_active_at / `focus_minutes`（累计专注，排名用）/ `today_minutes`+`today_date`（当日专注，跨天重置）/ `streak_days`（连续达标天数）/ `total_days`（累计达标天数）/ `focusing`（正在专注中）/ `last_met_date`）。**一人一室**：`room.create` / `room.join` 校验。
 - `comments_self`：留言（id/project_id(=房间号)/parent_id/root_id/nickname/content/role/likes/liked_by/created_at/updated_at）。
+- `user_data_self`：三端互通的用户数据（`user_id` 唯一 / `tasks`/`stats`/`records`/`profile` 四个 JSON 列 / `updated_at`）。**`profile` 走字段级合并**，其余整块覆盖。
 - `ai_usage_self`：AI 用量（`user_id` + `usage_date`(北京时间 YYYY-MM-DD) 唯一 / `used` 当日次数 / `last_at` 上次调用毫秒）。**列名用 `used` 而非 `count`**（CloudBase rdb 会把 `count` 当聚合函数，不能与其他字段一起 select）。
 
 > 待办：如需「成员真实专注时长排行」，需在 `room_members_self` 增加 `focus_minutes`、`nickname`，并新增云函数 action `focus.record`、在 `room.get` 返回这两个字段。
@@ -89,7 +100,9 @@ AiTodo     { title:string, durationMin:number, difficulty:'easy'|'medium'|'hard'
 - 待办时长：预设 15/25/45/60，自定义 1–600 分钟。
 - 提前退出：不计番茄；待办保持未完成；记录中断原因（`INTERRUPT_REASONS`）。
 - 签到：每日 0 点刷新；连续天数 = 连续满足「当日已签到 且 当日专注 ≥10 分钟」；签到经验：连续≥7 天 +15，否则 +10。
-- 森林：树 = `floor(累计番茄 / 10) + 复活奖励树`；复活消耗 50 经验。
+- 番茄园：`harvested = floor(累计番茄 / POMODOROS_PER_TOMATO) + bonus`；等级取 `TOMATO_LEVELS`（0 番茄幼苗 / 10 小番茄园 / 50 茂盛番茄园 / 150 番茄农场）；清除 1 棵枯萎番茄消耗 2 个专注番茄。
+- 等级/经验：`expForLevel(level) = 200 + (level - 1) × 100`；`normalizeLevel()` 对旧存档按进度百分比幂等折算（等级不变）。
+- 昵称 ≤12 字、个性签名 ≤30 字（按 Unicode 码点计数与截断，emoji 只算 1 个字且不被劈开）。
 
 ## 5. 身份模型（三端）
 
