@@ -1,6 +1,6 @@
 import { router } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
-import { themeOf, BACKGROUNDS, WHITE_NOISES } from '../model/Types';
+import { themeOf, BACKGROUNDS, WHITE_NOISES, expForLevel } from '../model/Types';
 import { formatMMSS, genId, todayKey } from '../model/Store';
 
 @Entry
@@ -78,7 +78,7 @@ struct StudyRoomFocus {
       while (u.exp >= u.nextLevelExp) {
         u.level += 1;
         u.exp -= u.nextLevelExp;
-        u.nextLevelExp = Math.floor(u.nextLevelExp * 1.5);
+        u.nextLevelExp = expForLevel(u.level + 1);
       }
       AppState.saveUser();
     }

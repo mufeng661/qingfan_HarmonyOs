@@ -2,10 +2,10 @@ import { router, display } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { AppState } from '../model/AppState';
-import { themeOf, TaskItem, ThemeDef, FONT_DISPLAY } from '../model/Types';
+import { themeOf, TaskItem, ThemeDef, FONT_DISPLAY, gainExp } from '../model/Types';
 import { Store, greet, genId, todayKey } from '../model/Store';
 import { TabBar } from '../components/TabBar';
-import { CloudAiService } from '../service/CloudAiService';
+import { CloudAiService, AiMessage, AiTodo } from '../service/CloudAiService';
 
 interface GuideStep {
   icon: string;
@@ -19,6 +19,12 @@ interface TargetRect {
   y: number;
   w: number;
   h: number;
+}
+
+interface Msg {
+  role: 'me' | 'ai';
+  text: string;
+  action: string;
 }
 
 @Entry
@@ -47,12 +53,17 @@ struct Home {
   @State inviteRoomId: string = '';
   @State inviteRoomName: string = '';
   @State inviteFrom: string = '';
+  @State showTodoRefresh: boolean = false;
   private inviteHandled: string = '';
   private t: ThemeDef = themeOf(AppState.instance.themeKey);
   private todayFocusedMin: number = 0;
   private todayFinished: number = 0;
   private midnightTimerId: number = -1;
   private lastDayKey: string = '';
+  // 问候语里的昵称做成 @State 镜像：build 里直接读 AppState.instance.user 的话，
+  // 别的页面改了资料不会让这一行重绘（ArkUI 只重绘读到了变化状态的节点）。
+  @StorageLink('qfProfileTick') @Watch('onProfileTick') profileTick: number = 0;
+  @State greetName: string = '同学';
   private rectSign: TargetRect = { x: 0, y: 0, w: 0, h: 0 };
   private rectChallenge: TargetRect = { x: 0, y: 0, w: 0, h: 0 };
   private rectAi: TargetRect = { x: 0, y: 0, w: 0, h: 0 };
@@ -75,6 +86,7 @@ struct Home {
     this.refreshTodayStats();
     this.refreshTasks();
     this.syncUserState();
+    this.syncGreetName();
     this.checkGuide();
     this.loadAiTip();
     this.midnightTimerId = setInterval(() => {
@@ -102,9 +114,20 @@ struct Home {
       this.refreshTodayStats();
       this.refreshTasks();
       this.syncUserState();
+      this.syncGreetName();
       this.checkInvite();
+      this.maybeTodoRefresh();
       this.uiTick += 1;
     });
+  }
+
+  // 资料在别处（编辑资料 / 云端同步）变化时刷新问候语昵称
+  syncGreetName(): void {
+    this.greetName = AppState.instance.user?.nickname ?? '同学';
+  }
+
+  onProfileTick() {
+    this.syncGreetName();
   }
 
   // 检测剪贴板里的自习室分享文案，命中则弹出「是否加入」
@@ -161,6 +184,92 @@ struct Home {
     }
   }
 
+  // 待办全部完成时，再次进入界面根据记忆（每天一次）提示是否换新（仅登录用户）
+  maybeTodoRefresh() {
+    if (!AppState.isLoggedIn()) return;
+    if (!AppState.allTasksDone()) return;
+    const today = todayKey();
+    Store.getStr('qf_todo_refresh_asked', '').then((v: string) => {
+      if (v === today) return;
+      Store.setStr('qf_todo_refresh_asked', today);
+      this.showTodoRefresh = true;
+    });
+  }
+
+  // 提取 AI 记忆 + 当前数据，请 AI 生成新一批待办
+  async regenerateTodos() {
+    this.showTodoRefresh = false;
+    if (!AppState.isLoggedIn()) {
+      this.toast('登录后可自动创建待办');
+      return;
+    }
+    this.toast('正在生成…');
+    const memory: Msg[] = await Store.getArr<Msg>('qf_ai_chat_' + AppState.userKey());
+    const history: AiMessage[] = [];
+    const start = memory.length > 10 ? memory.length - 10 : 0;
+    for (let i = start; i < memory.length; i++) {
+      const m = memory[i];
+      if (m && m.text) {
+        history.push({ role: m.role === 'me' ? 'user' : 'assistant', content: m.text });
+      }
+    }
+    history.push({ role: 'user', content: '我的待办都完成了，帮我制定一批新的今日待办（尽量和之前不重复），2-6 条即可。' });
+    try {
+      const res = await CloudAiService.chat(
+        AppState.userKey(),
+        history,
+        '帮我制定一批新的今日待办（尽量和之前的待办不重复），2-6 条即可',
+        true
+      );
+      this.applyNewTodos(res.todos);
+    } catch (e) {
+      this.applyNewTodos(this.localSuggest());
+    }
+  }
+
+  applyNewTodos(todos: AiTodo[]) {
+    const cur: Record<string, boolean> = {};
+    AppState.instance.tasks.forEach(t => { cur[t.title] = true; });
+    const list: TaskItem[] = [];
+    for (let i = 0; i < todos.length; i++) {
+      const t = todos[i];
+      if (!t || !t.title) continue;
+      if (cur[t.title] === true) continue;
+      let diff: 'easy' | 'medium' | 'hard' = 'medium';
+      if (t.difficulty === 'easy') { diff = 'easy'; } else if (t.difficulty === 'hard') { diff = 'hard'; }
+      list.push({
+        id: genId('t'), title: t.title, durationMin: t.durationMin > 0 ? t.durationMin : 25, status: 'todo',
+        difficulty: diff, order: list.length, createdAt: Date.now(), bgSeed: 'sky'
+      });
+    }
+    if (list.length === 0) {
+      this.toast('暂时没有合适的待办');
+      return;
+    }
+    AppState.instance.tasks = list;
+    AppState.saveTasks();
+    this.refreshTasks();
+    this.uiTick += 1;
+    this.toast('已更新 ' + list.length + ' 个待办');
+  }
+
+  localSuggest(): AiTodo[] {
+    const pool: AiTodo[] = [
+      { title: '整理今日笔记', durationMin: 25, difficulty: 'easy' },
+      { title: '复习昨天学的内容', durationMin: 25, difficulty: 'medium' },
+      { title: '阅读 30 页书', durationMin: 45, difficulty: 'medium' },
+      { title: '背 50 个单词', durationMin: 25, difficulty: 'easy' },
+      { title: '完成一套练习题', durationMin: 60, difficulty: 'hard' }
+    ];
+    const cur: Record<string, boolean> = {};
+    AppState.instance.tasks.forEach(t => { cur[t.title] = true; });
+    const out: AiTodo[] = [];
+    for (let i = 0; i < pool.length && out.length < 3; i++) {
+      if (cur[pool[i].title] !== true) out.push(pool[i]);
+    }
+    return out;
+  }
+
   syncUserState() {
     const s = AppState.recomputeStreak();
     AppState.saveUser();
@@ -193,7 +302,7 @@ struct Home {
       { icon: '🎁', title: '每日签到', desc: '点右上角「签到」领取经验，连续签到奖励会递增。', target: 'sign' },
       { icon: '🏆', title: '今日挑战', desc: '完成目标番茄数即达成挑战，额外 +50 经验；点「调整」可自定义目标。', target: 'challenge' },
       { icon: '✨', title: 'AI 助手', desc: '点这张卡片，让青番 AI 帮你排待办、找高效时段、看专注洞察。', target: 'ai' },
-      { icon: '📝', title: '今日待办', desc: '长按待办可拖动排序；点「开始」进入专注计时，完成后种下一棵树。', target: 'todo' },
+      { icon: '📝', title: '今日待办', desc: '长按待办可拖动排序；点「开始」进入专注计时，完成后种下一棵番茄。', target: 'todo' },
       { icon: '🧭', title: '底部导航', desc: '今日 / 自习室 / 时间轴 / 数据 / 我的，随时切换。', target: 'tab' }
     ];
   }
@@ -295,10 +404,6 @@ struct Home {
     this.tasks = AppState.instance.tasks.slice();
   }
 
-  nickName(): string {
-    return AppState.instance.user?.nickname ?? '同学';
-  }
-
   dateStr(): string {
     const d = new Date();
     const w = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
@@ -338,12 +443,7 @@ struct Home {
     if (t.status === 'done') {
       const u = AppState.instance.user;
       if (u) {
-        u.exp += 20;
-        while (u.exp >= u.nextLevelExp) {
-          u.level += 1;
-          u.exp -= u.nextLevelExp;
-          u.nextLevelExp = Math.floor(u.nextLevelExp * 1.5);
-        }
+        gainExp(u, 20);
         AppState.saveUser();
       }
       this.toast(`完成「${t.title}」 +20 经验`);
@@ -427,7 +527,7 @@ struct Home {
               .fontFamily(FONT_DISPLAY)
               .fontSize(13)
               .fontColor(this.t.ink2)
-            Text(`${greet()}，${this.nickName()}`)
+            Text(`${greet()}，${this.greetName}`)
               .fontFamily(FONT_DISPLAY)
               .fontSize(26)
               .maxFontSize(26)
@@ -500,6 +600,46 @@ struct Home {
       if (this.showInvite) {
         this.invitePanel()
       }
+      if (this.showTodoRefresh) {
+        this.todoRefreshPanel()
+      }
+    }
+  }
+
+  @Builder
+  todoRefreshPanel() {
+    Stack() {
+      Column()
+        .width('100%').height('100%')
+        .backgroundColor('rgba(30,40,26,0.42)')
+        .onClick(() => { this.showTodoRefresh = false; })
+      Column() {
+        Text('今日待办已完成 🎉').fontFamily(FONT_DISPLAY).fontSize(17).fontColor(this.t.ink)
+        Text('待办都完成啦，根据你的习惯换一批新的待办？')
+          .fontSize(12.5).fontColor(this.t.ink2).lineHeight(20)
+          .textAlign(TextAlign.Center).margin({ top: 10, bottom: 18 })
+        Row({ space: 10 }) {
+          Row() {
+            Text('先不用').fontSize(14).fontColor(this.t.ink2)
+          }
+          .layoutWeight(1).height(44).borderRadius(12)
+          .border({ width: 1, color: this.t.line })
+          .justifyContent(FlexAlign.Center)
+          .onClick(() => { this.showTodoRefresh = false; })
+
+          Row() {
+            Text('换一批').fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Medium)
+          }
+          .layoutWeight(1).height(44).borderRadius(12)
+          .backgroundColor(this.t.leaf)
+          .justifyContent(FlexAlign.Center)
+          .onClick(() => { this.regenerateTodos(); })
+        }
+        .width('100%')
+      }
+      .width(300).padding(22)
+      .backgroundColor(this.t.surface).borderRadius(22)
+      .alignItems(HorizontalAlign.Center)
     }
   }
 
@@ -608,7 +748,7 @@ struct Home {
           .fontSize(11)
           .fontColor(this.todayFinished >= AppState.instance.challengeGoal ? this.t.gold : this.t.ink3)
           .margin({ top: 3 })
-        Stack() {
+        Stack({ alignContent: Alignment.Start }) {
           Row().width('100%').height(6).borderRadius(99).backgroundColor(this.t.surface2)
           Row().width(this.progressWidth()).height(6).borderRadius(99)
             .backgroundColor(this.todayFinished >= AppState.instance.challengeGoal ? this.t.gold : this.t.leaf)

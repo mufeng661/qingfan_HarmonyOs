@@ -15,7 +15,7 @@
 - [x] A9 统计 `Stats`：数据卡 + AI 洞察 + 时间轴
 - [x] A10 我的 `Me`：资料/经验/签到/森林/打卡/徽章/主题/小组件/新手指引/设置/退出
 - [x] A11 子页：`EditProfile` / `Badges` / `Notify` / `ThemePicker` / `WidgetPicker` / `AIAssistant` / `AIChat`
-- [x] A12 桌面小组件：`QfWidgetAbility` + `WidgetCard`（2×2/2×4/4×4）
+- [x] A12 桌面小组件：`QfWidgetAbility` + `WidgetCard`（2×2 多邻国式 / 2×4 宽卡；4×4 已下架、内容并入 2×4）
 - [x] A13 新手引导：首页高亮目标区域 + 气泡箭头（可回放）
 - [x] A14 访客模式：游客可用待办+计时；AI/统计/自习室需登录
 - [x] A15 账号按手机号隔离存储；退出登录保留账号数据；登录后重新加载

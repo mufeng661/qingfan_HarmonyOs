@@ -19,6 +19,9 @@
     "pages/ThemePicker",
     "pages/WidgetPicker",
     "pages/AIAssistant",
-    "pages/AIChat"
+    "pages/AIChat",
+    "pages/About",
+    "pages/Agreement",
+    "pages/Feedback"
   ]
 }

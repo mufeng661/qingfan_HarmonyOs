@@ -179,6 +179,24 @@
     };
 
     /* ============================================================
+       等级 / 经验体系
+    ============================================================ */
+    function expForLevel(level) { return 200 + (level - 1) * 100; }
+    const LEVEL_TIERS = [
+      { minLevel: 1,  name: '萌新叶',   color: '#6E9B57', bgFrom: '#4A6B3A', bgTo: '#2E4426' },
+      { minLevel: 6,  name: '成长苗',   color: '#5B9B7E', bgFrom: '#3A6B52', bgTo: '#1F4435' },
+      { minLevel: 11, name: '繁茂枝',   color: '#D9A441', bgFrom: '#8A6B1E', bgTo: '#4A380E' },
+      { minLevel: 21, name: '参天木',   color: '#C08A4E', bgFrom: '#7A5420', bgTo: '#3E2A0E' },
+      { minLevel: 31, name: '森林守护',  color: '#7B6EA9', bgFrom: '#4A3E6B', bgTo: '#261E3A' },
+      { minLevel: 51, name: '传说之森',  color: '#E07A5F', bgFrom: '#8A3A2A', bgTo: '#3E1A14' },
+    ];
+    function tierOfLevel(level) {
+      let t = LEVEL_TIERS[0];
+      for (const x of LEVEL_TIERS) if (level >= x.minLevel) t = x;
+      return t;
+    }
+
+    /* ============================================================
        图标库（自制线性 SVG，stroke 风格）
     ============================================================ */
     const I = {
@@ -1220,8 +1238,9 @@
           </div>
         );
       }
-      const expMax = 3000;
+      const expMax = expForLevel(level);
       const expPct = Math.round(exp / expMax * 100);
+      const tier = tierOfLevel(level);
       const [name, setName] = useState('林小满');
       const [signature, setSignature] = useState('把专注，种成一片森林');
       const [editing, setEditing] = useState(false);
@@ -1259,28 +1278,30 @@
       const saveProfile = () => { setName(nameDraft.trim() || name); setSignature(sigDraft.trim() || signature); setEditing(false); };
       return (
         <div style={{ height: '100%', background: T.bg, overflow: 'auto', padding: '22px 22px 88px' }}>
-          {/* 个人信息（点击编辑资料） */}
-          <div onClick={() => { setNameDraft(name); setSigDraft(signature); setEditing(true); }} style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, cursor: 'pointer' }}>
-            <div style={{ width: 58, height: 58, borderRadius: '50%', background: `linear-gradient(135deg, ${T.leaf}, ${T.leafDeep})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 600, position: 'relative' }}>
-              {name[0]}
-              <div style={{ position: 'absolute', right: -2, bottom: -2, background: T.gold, color: '#fff', borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '2px 6px', border: '2px solid #fff' }}>Lv.{level}</div>
+          {/* 等级卡片（仿小黑盒） */}
+          <div onClick={() => { setNameDraft(name); setSigDraft(signature); setEditing(true); }} style={{ cursor: 'pointer', borderRadius: 20, marginBottom: 16, overflow: 'hidden', background: `linear-gradient(140deg, ${tier.bgFrom}, ${tier.bgTo})`, boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}>
+            {/* 个人信息行 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '20px 20px 16px' }}>
+              <div style={{ width: 58, height: 58, borderRadius: '50%', background: 'linear-gradient(135deg, rgba(255,255,255,0.3), rgba(255,255,255,0.08))', border: '2px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 600, position: 'relative', flexShrink: 0 }}>
+                {name[0]}
+                <div style={{ position: 'absolute', right: -2, bottom: -2, background: tier.color, color: '#fff', borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '2px 7px', border: '2px solid #fff' }}>Lv.{level}</div>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 18, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>{name}<span style={{ color: 'rgba(255,255,255,0.5)' }}>{I.chevronR(14)}</span></div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{signature}</div>
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 18, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>{name}<span style={{ color: T.ink3 }}>{I.chevronR(14)}</span></div>
-              <div style={{ fontSize: 12, color: T.ink2, marginTop: 3 }}>{signature}</div>
+            {/* 经验进度条 */}
+            <div style={{ padding: '0 20px 18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>经验值</span>
+                <span className="serif" style={{ fontSize: 15, color: '#fff' }}>{exp}<span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}> / {expMax}</span></span>
+              </div>
+              <div style={{ height: 8, borderRadius: 99, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
+                <div style={{ width: `${expPct}%`, height: '100%', background: 'linear-gradient(90deg, rgba(255,255,255,0.6), #fff)', borderRadius: 99, transition: 'width 0.5s' }} />
+              </div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>再获得 {expMax - exp} 经验升级到 Lv.{level + 1}</div>
             </div>
-          </div>
-
-          {/* 经验值 */}
-          <div style={{ padding: '16px 18px', background: T.surface, borderRadius: 18, border: `1px solid ${T.line}`, marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-              <span style={{ fontSize: 13, color: T.ink2 }}>经验值</span>
-              <span className="serif" style={{ fontSize: 15 }}>{exp}<span style={{ fontSize: 11, color: T.ink3 }}> / {expMax}</span></span>
-            </div>
-            <div style={{ height: 8, borderRadius: 99, background: T.surface2, overflow: 'hidden' }}>
-              <div style={{ width: `${expPct}%`, height: '100%', background: `linear-gradient(90deg, ${T.leaf}, ${T.gold})`, borderRadius: 99, transition: 'width 0.5s' }} />
-            </div>
-            <div style={{ fontSize: 11, color: T.ink3, marginTop: 8 }}>再获得 {expMax - exp} 经验升级到 Lv.{level + 1}</div>
           </div>
 
           {/* 签到 */}
@@ -2020,8 +2041,8 @@
       const [tab, setTab] = useState('home');
       const [loggedIn, setLoggedIn] = useState(false); // 访客模式：未登录可用待办+计时
       const [signed, setSigned] = useState(false);
-      const [exp, setExp] = useState(2450);
-      const [level, setLevel] = useState(12);
+      const [exp, setExp] = useState(150);
+      const [level, setLevel] = useState(3);
       const [trees, setTrees] = useState(5);       // 已种下的树
       const [withered, setWithered] = useState(1);  // 中断而枯萎的树
       const [streakDays, setStreakDays] = useState(12); // 连续签到天数
@@ -2059,14 +2080,33 @@
       };
       const handleSign = () => {
         if (!loggedIn) { requireLogin('登录后即可签到'); return; }
-        if (!signed) { setSigned(true); setStreakDays(d => d + 1); setExp(e => e + 10 + (streakDays >= 7 ? 5 : 0)); showToast(`签到成功 +${10 + (streakDays >= 7 ? 5 : 0)} 经验`, I.gift(15)); }
+        if (!signed) {
+          setSigned(true); setStreakDays(d => d + 1);
+          const gain = 10 + (streakDays >= 7 ? 5 : 0);
+          setExp(e => {
+            let ne = e + gain, nl = level;
+            while (ne >= expForLevel(nl)) { ne -= expForLevel(nl); nl++; }
+            if (nl !== level) setLevel(nl);
+            return ne;
+          });
+          showToast(`签到成功 +${gain} 经验`, I.gift(15));
+        }
       };
       const handleStart = (t) => { setFocusTask(t); setAppState('focus'); };
       const handleToggleDone = (id) => {
         setTasks(ts => ts.map(t => {
           if (t.id === id) {
             const nd = !t.done;
-            if (nd) { setExp(e => e + t.pomos * 20); showToast(`完成「${t.title}」 +${t.pomos * 20} 经验`, I.star(15)); }
+            if (nd) {
+              const gain = t.pomos * 20;
+              setExp(e => {
+                let ne = e + gain, nl = level;
+                while (ne >= expForLevel(nl)) { ne -= expForLevel(nl); nl++; }
+                if (nl !== level) setLevel(nl);
+                return ne;
+              });
+              showToast(`完成「${t.title}」 +${gain} 经验`, I.star(15));
+            }
             return { ...t, done: nd };
           }
           return t;
@@ -2097,7 +2137,13 @@
         setCompletedTask(focusTask);
         setShowComplete(true);
         setTasks(ts => ts.map(t => t.id === focusTask.id ? { ...t, done: true } : t));
-        setExp(e => e + focusTask.pomos * 20);
+        const gain = focusTask.pomos * 20;
+        setExp(e => {
+          let ne = e + gain, nl = level;
+          while (ne >= expForLevel(nl)) { ne -= expForLevel(nl); nl++; }
+          if (nl !== level) setLevel(nl);
+          return ne;
+        });
         setTrees(t => t + 1);
       };
       const handleQuit = () => { setWithered(w => w + 1); showToast('专注中断，小树苗枯萎了', I.tree(15, T.tomato)); setAppState('main'); setFocusTask(null); };

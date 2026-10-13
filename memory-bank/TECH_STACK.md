@@ -69,8 +69,10 @@ entry/src/main/ets/
 ## 7. 桌面卡片
 
 - `FormExtensionAbility`（`widget/QfWidgetAbility.ets`）+ ArkUI 渲染（`widget/pages/WidgetCard.ets`）。
-- 尺寸：`2*2 / 2*4 / 4*4`（见 `form_config.json`）。
-- 数据经 `formBindingData` 下发（今日番茄、目标、连签、森林、进度）。
+- 尺寸：`2*2 / 2*4`（见 `form_config.json`）。4×4 已于 2026-10-13 下架，其内容并入 2×4；
+  `QfWidgetAbility.dimNameOf()` 仍保留 4×4 分支，用于还原桌面残留的旧 4×4 卡片。
+- 数据经 `formBindingData` 全量下发 8 个 key（dimension / title / done / goal / min / streak / trees / date / progressPct），
+  卡片页 `@LocalStorageProp` 按 key 读取，缺 key 会退回默认值（假数据）。
 
 ## 8. 关键依赖
 

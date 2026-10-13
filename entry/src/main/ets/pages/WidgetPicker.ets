@@ -20,15 +20,20 @@ struct WidgetPicker {
   @State uiTick: number = 0;
   private t: ThemeDef = themeOf(AppState.instance.themeKey);
 
+  // 尺寸规格与 form_config.json 的 supportDimensions 保持一致（4×4 已下架）
   private sizes: SizeOption[] = [
     { key: '2x2', label: '2×2', desc: '极简' },
-    { key: '2x4', label: '2×4', desc: '横条' },
-    { key: '4x4', label: '4×4', desc: '大卡' }
+    { key: '2x4', label: '2×4', desc: '横条' }
   ];
 
   doneCount(): number {
     const k = todayKey();
     return AppState.instance.stats[k]?.pomodoroCount ?? 0;
+  }
+
+  todayMinutes(): number {
+    const k = todayKey();
+    return AppState.instance.stats[k]?.focusMinutes ?? 0;
   }
 
   goal(): number {
@@ -49,14 +54,43 @@ struct WidgetPicker {
     return Math.floor(t / 10);
   }
 
+  streakDays(): number {
+    return AppState.instance.user?.streak ?? 0;
+  }
+
+  // 与桌面卡片 2×2 的「吉祥物」同一套状态逻辑
+  moodEmoji(): string {
+    const d = this.doneCount();
+    const g = this.goal();
+    if (d >= g) {
+      return '🎉';
+    }
+    if (d > 0) {
+      return '🍅';
+    }
+    return '🌱';
+  }
+
+  moodText(): string {
+    const d = this.doneCount();
+    const g = this.goal();
+    if (d >= g) {
+      return '今日目标达成';
+    }
+    if (d > 0) {
+      return '继续加油';
+    }
+    return '今天还没开始';
+  }
+
   isAdded(): boolean {
     return this.addedSize === this.pickedSize;
   }
 
   dimensionValue(): number {
+    // formInfo.FormDimension 枚举：Dimension_1_2=1 / 2_2=2 / 2_4=3 / 4_4=4
     if (this.pickedSize === '2x2') return 2;
-    if (this.pickedSize === '2x4') return 3;
-    return 4;
+    return 3;
   }
 
   addToDesktop(): void {
@@ -105,7 +139,7 @@ struct WidgetPicker {
         Row() {
           Column() {
             Text('桌面小组件').fontFamily(FONT_DISPLAY).fontSize(20).fontColor(this.t.ink)
-            Text('把专注进度放到手机桌面').fontSize(11).fontColor(this.t.ink2).margin({ top: 2 })
+            Text('把专注进度放到手机桌面 · 点卡片进今日待办').fontSize(11).fontColor(this.t.ink2).margin({ top: 2 })
           }
           .alignItems(HorizontalAlign.Start)
           .layoutWeight(1)
@@ -186,22 +220,31 @@ struct WidgetPicker {
   @Builder
   widgetPreview() {
     if (this.pickedSize === '2x2') {
+      // 多邻国式：吉祥物 + 大数字 + 状态文案 + 细完成度条（与桌面卡片 compactLayout 一致）
       Column() {
-        Row({ space: 5 }) {
-          Text('🍅').fontSize(15)
-          Text('青番').fontSize(10.5).fontWeight(FontWeight.Medium).fontColor(this.t.ink2)
+        Row() {
+          Text('今日番茄').fontSize(9.5).fontColor(this.t.ink3)
+          Blank()
+          Text('🔥 ' + this.streakDays()).fontSize(9.5).fontWeight(FontWeight.Medium).fontColor(this.t.tomato)
         }
         .width('100%')
-        Blank()
-        Column() {
-          Text() {
-            Span(this.doneCount() + '').fontFamily(FONT_DISPLAY).fontSize(26).fontColor(this.t.ink)
-            Span('/' + this.goal()).fontSize(13).fontColor(this.t.ink3)
-          }
-          Text('今日番茄').fontSize(10).fontColor(this.t.ink3).margin({ top: 3 })
+
+        Row() {
+          Text(this.moodEmoji()).fontSize(20)
+          Text(this.doneCount() + '').fontFamily(FONT_DISPLAY).fontSize(27).fontColor(this.t.leaf).margin({ left: 3 })
+          Text('/' + this.goal()).fontSize(12).fontColor(this.t.ink3).margin({ left: 1 })
+        }
+        .alignItems(VerticalAlign.Bottom)
+        .margin({ top: 1 })
+
+        Text(this.moodText()).fontSize(9.5).fontColor(this.t.ink3).margin({ top: 2 })
+
+        Stack() {
+          Row().width('100%').height(5).borderRadius(99).backgroundColor(this.t.surface2)
+          Row().width(this.pct() + '%').height(5).borderRadius(99).backgroundColor(this.t.leaf)
         }
         .width('100%')
-        .alignItems(HorizontalAlign.Start)
+        .margin({ top: 8 })
       }
       .width(108).height(108)
       .padding(12)
@@ -209,43 +252,48 @@ struct WidgetPicker {
       .borderRadius(20)
       .border({ width: 1, color: this.t.line })
       .shadow({ radius: 30, color: 'rgba(0,0,0,0.10)', offsetY: 12 })
-    } else if (this.pickedSize === '2x4') {
-      Column() {
-        Row() {
-          Row({ space: 6 }) {
-            Text('🍅').fontSize(15)
-            Text('青番 · 今日专注').fontSize(11.5).fontWeight(FontWeight.Medium).fontColor(this.t.ink2)
-          }
-          Blank()
-          Text(this.reached() ? '✓ 已达成' : this.pct() + '%')
-            .fontSize(10).fontWeight(FontWeight.Medium)
-            .fontColor(this.reached() ? this.t.gold : this.t.ink3)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
+    } else {
+      // 2×4 宽卡：左右两栏，信息与桌面卡片 wideLayout 一一对应
+      Row() {
+        Column() {
+          Text('🌿 青番').fontSize(11).fontWeight(FontWeight.Bold).fontColor(this.t.leaf)
+          Text(this.todayMinutes() + ' 分钟').fontFamily(FONT_DISPLAY).fontSize(21).fontColor(this.t.ink).margin({ top: 1 })
+          Text('🌳 ' + this.totalTrees() + ' 棵树').fontSize(9.5).fontColor(this.t.ink3).margin({ top: 1 })
         }
-        .width('100%')
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Center)
 
         Column() {
           Row() {
-            Text() {
-              Span(this.doneCount() + '').fontFamily(FONT_DISPLAY).fontSize(22).fontColor(this.t.ink)
-              Span(' / ' + this.goal() + ' 番茄').fontSize(12).fontColor(this.t.ink3)
-            }
+            Text('🍅 ' + this.doneCount() + '/' + this.goal())
+              .fontSize(11.5).fontWeight(FontWeight.Medium).fontColor(this.t.ink)
             Blank()
-            Row({ space: 2 }) {
-              Text('🔥').fontSize(11)
-              Text('连签 ' + (AppState.instance.user?.streak ?? 0) + ' 天').fontSize(10).fontColor(this.t.ink3)
-            }
+            Text('🔥 ' + this.streakDays() + ' 天').fontSize(10).fontColor(this.t.tomato)
           }
           .width('100%')
-          .margin({ bottom: 6 })
 
           Stack() {
-            Row().width('100%').height(6).borderRadius(99).backgroundColor(this.t.surface2)
-            Row().width(this.pct() + '%').height(6).borderRadius(99)
+            Row().width('100%').height(5).borderRadius(99).backgroundColor(this.t.surface2)
+            Row().width(this.pct() + '%').height(5).borderRadius(99)
               .backgroundColor(this.reached() ? this.t.gold : this.t.leaf)
           }
           .width('100%')
+          .margin({ top: 6 })
+
+          Row() {
+            Text('查看待办 ›').fontSize(10).fontColor(this.t.leaf)
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.End)
+          .margin({ top: 6 })
         }
-        .width('100%')
+        .layoutWeight(1)
+        .margin({ left: 10 })
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Center)
       }
       .width(212).height(104)
       .padding(13)
@@ -253,88 +301,6 @@ struct WidgetPicker {
       .borderRadius(20)
       .border({ width: 1, color: this.t.line })
       .shadow({ radius: 30, color: 'rgba(0,0,0,0.10)', offsetY: 12 })
-    } else {
-      Column() {
-        Row() {
-          Row({ space: 6 }) {
-            Text('🍅').fontSize(15)
-            Text('青番 · 今日专注').fontSize(11.5).fontWeight(FontWeight.Medium).fontColor(this.t.ink2)
-          }
-          Blank()
-          Text(this.reached() ? '✓ 达成' : '进行中')
-            .fontSize(10).fontWeight(FontWeight.Medium)
-            .fontColor(this.reached() ? this.t.gold : this.t.ink3)
-        }
-        .width('100%')
-        .margin({ bottom: 8 })
-
-        Row({ space: 4 }) {
-          Text(this.doneCount() + '').fontFamily(FONT_DISPLAY).fontSize(30).fontColor(this.t.ink)
-          Text('/ ' + this.goal() + ' 番茄').fontSize(12.5).fontColor(this.t.ink3)
-        }
-        .width('100%')
-
-        Stack() {
-          Row().width('100%').height(7).borderRadius(99).backgroundColor(this.t.surface2)
-          Row().width(this.pct() + '%').height(7).borderRadius(99)
-            .backgroundColor(this.reached() ? this.t.gold : this.t.leaf)
-        }
-        .width('100%')
-        .margin({ top: 8 })
-
-        Row({ space: 10 }) {
-          Column() {
-            Row({ space: 5 }) {
-              Text('🌳').fontSize(13).fontColor(this.t.leafDeep)
-              Text('森林').fontSize(10).fontColor(this.t.ink2)
-            }
-            Text() {
-              Span(this.totalTrees() + '').fontFamily(FONT_DISPLAY).fontSize(17).fontColor(this.t.ink)
-              Span(' 棵').fontSize(10).fontColor(this.t.ink3)
-            }
-          }
-          .layoutWeight(1)
-          .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-          .backgroundColor(this.t.surface2)
-          .borderRadius(12)
-          .alignItems(HorizontalAlign.Start)
-
-          Column() {
-            Row({ space: 5 }) {
-              Text('🔥').fontSize(13).fontColor(this.t.tomato)
-              Text('连签').fontSize(10).fontColor(this.t.ink2)
-            }
-            Text() {
-              Span((AppState.instance.user?.streak ?? 0) + '').fontFamily(FONT_DISPLAY).fontSize(17).fontColor(this.t.ink)
-              Span(' 天').fontSize(10).fontColor(this.t.ink3)
-            }
-          }
-          .layoutWeight(1)
-          .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-          .backgroundColor(this.t.surface2)
-          .borderRadius(12)
-          .alignItems(HorizontalAlign.Start)
-        }
-        .width('100%')
-        .margin({ top: 10 })
-
-        Row({ space: 5 }) {
-          Text('▶').fontSize(11).fontColor('#FFFFFF')
-          Text('开始专注').fontSize(12).fontWeight(FontWeight.Medium).fontColor('#FFFFFF')
-        }
-        .width('100%')
-        .padding({ top: 8, bottom: 8 })
-        .borderRadius(11)
-        .backgroundColor(this.t.leaf)
-        .justifyContent(FlexAlign.Center)
-        .margin({ top: 10 })
-      }
-      .width(212).height(212)
-      .padding(14)
-      .backgroundColor(this.t.surface)
-      .borderRadius(22)
-      .border({ width: 1, color: this.t.line })
-      .shadow({ radius: 34, color: 'rgba(0,0,0,0.12)', offsetY: 14 })
     }
   }
 }

@@ -1,7 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
-import { themeOf, UserProfile, ThemeDef, FONT_DISPLAY } from '../model/Types';
+import { themeOf, UserProfile, ThemeDef, FONT_DISPLAY, expForLevel } from '../model/Types';
 import { CloudAuthService, AuthUser } from '../service/CloudAuthService';
 
 @Entry
@@ -69,10 +69,10 @@ struct Login {
       phone: au.phone,
       nickname: nick,
       avatarSeed: au.avatarSeed.length > 0 ? au.avatarSeed : nick.slice(0, 1),
-      bio: au.bio.length > 0 ? au.bio : '把专注，种成一片森林',
+      bio: au.bio.length > 0 ? au.bio : '把专注，种成一片番茄园',
       level: 1,
       exp: 0,
-      nextLevelExp: 3000,
+      nextLevelExp: expForLevel(1),
       streak: 0,
       lastSignDate: '',
       signDates: [],

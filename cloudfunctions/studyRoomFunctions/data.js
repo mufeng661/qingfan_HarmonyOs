@@ -90,7 +90,13 @@ async function saveStats(params, ctx) {
 async function saveProfile(params, ctx) {
   const userId = ctx.userId || "";
   if (!userId) return fail("请先登录", "NOT_LOGGED_IN");
-  await upsert(userId, { profile: asObj(params.profile) });
+  // 字段级合并，而不是整体覆盖：
+  // 三端各自只推自己关心的字段（小程序端只改昵称/签名，鸿蒙端还会推等级、经验、
+  // 连续签到、头像种子…），整体覆盖会让「后写的一方」把另一端才有的字段抹掉。
+  const row = await fetchRow(userId);
+  const prev = asObj(row && row.profile);
+  const patch = asObj(params.profile);
+  await upsert(userId, { profile: Object.assign({}, prev, patch) });
   return ok({});
 }
 

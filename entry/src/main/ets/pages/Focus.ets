@@ -1,7 +1,7 @@
 import { router } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
-import { themeOf, BACKGROUNDS, WHITE_NOISES, DURATIONS, INTERRUPT_REASONS, TaskItem, FocusRecord, BgOption, NoiseOption } from '../model/Types';
+import { themeOf, BACKGROUNDS, WHITE_NOISES, DURATIONS, INTERRUPT_REASONS, TaskItem, FocusRecord, BgOption, NoiseOption, gainExp } from '../model/Types';
 import { Store, formatMMSS, genId, todayKey } from '../model/Store';
 import { CloudRoomService, Room, RoomMember } from '../service/CloudRoomService';
 
@@ -453,12 +453,7 @@ struct Focus {
       }
       const u = AppState.instance.user;
       if (u) {
-        u.exp += 20;
-        while (u.exp >= u.nextLevelExp) {
-          u.level += 1;
-          u.exp -= u.nextLevelExp;
-          u.nextLevelExp = Math.floor(u.nextLevelExp * 1.5);
-        }
+        gainExp(u, 20);
         AppState.saveUser();
       }
     }

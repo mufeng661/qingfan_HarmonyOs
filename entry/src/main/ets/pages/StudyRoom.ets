@@ -117,6 +117,8 @@ struct StudyRoomPage {
           fixed[0].role = detail.role;
           fixed[0].my_focus_minutes = detail.my_focus_minutes;
           fixed[0].member_count = detail.member_count;
+          // 月度冠军：当月自习室排名第 1 记一次（每月只计 1 次），写入资料随云端同步
+          if (this.myRank() === 1) AppState.recordChampion();
         } catch (e) {
           this.roomMembers = [];
         }

@@ -57,7 +57,9 @@
   - 宽度用百分比 / `layoutWeight`（列表项、三栏概览、TabBar 五等分）；
   - 弹窗用固定宽度（280~300）+ 居中；
   - 文字用 `maxLines + textOverflow + maxFontSize/minFontSize` 自适应（如首页问候语）。
-- 桌面小组件通过 `form_config.json` 的 `supportDimensions`（2×2 / 2×4 / 4×4）与 `WidgetCard` 按尺寸分支渲染，实现「同一数据、不同尺寸」的适配。
+- 桌面小组件通过 `form_config.json` 的 `supportDimensions`（2×2 / 2×4）与 `WidgetCard` 按尺寸分支渲染，实现「同一数据、不同尺寸」的适配。
+  - 2×2：多邻国（Duolingo）小组件式，只讲一件事 —— 大号吉祥物 emoji + 大数字 + 一句状态文案（表情随进度 🌱 → 🍅 → 🎉）+ 细完成度条。
+  - 2×4：宽卡，左右两栏，承载原 4×4 的全部信息（品牌 / 专注时长 / 森林 ｜ 番茄进度 / 连签 / 完成度 / 日期 / 行动引导）。
 - 高保真原型 `design/index.html` 以手机框（393×852）呈现；宽屏时原型会隐藏侧栏并自适应缩放。
 
 ## 6. 动效

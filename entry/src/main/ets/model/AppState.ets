@@ -1,5 +1,6 @@
 import { UserProfile, TaskItem, FocusRecord, BadgeItem, StudyRoom, DailyStats, ThemeKey, ThemeDef,
-  themeOf, BADGE_CATALOG, Account } from './Types';
+  themeOf, BADGE_CATALOG, BADGE_TIER_GOALS, badgeIconKey, Account, POMODOROS_PER_TOMATO, TOMATO_LEVELS, TomatoCell, TomatoStats,
+  expForLevel, normalizeLevel, gainExp, tierOfLevel, LevelTier } from './Types';
 import { Store, genId } from './Store';
 import { CloudDataService } from '../service/CloudDataService';
 
@@ -46,6 +47,17 @@ export class AppState {
 
   static instance: AppState = new AppState();
 
+  // 最近一次「把资料推给云端」的时刻（毫秒）。
+  // 用途：刚在本地保存过资料时（4 秒内），拉云端不要把本地值覆盖回去 ——
+  // 否则「保存 → 返回「我的」页触发拉取 → 云端还是旧值」会把刚改好的昵称吃掉（回声覆盖）。
+  private static lastProfilePushAt: number = 0;
+
+  // 资料（昵称 / 头像 / 个性签名 / 等级经验）发生变化时广播一次，
+  // 让已经打开的页面立刻重渲染 —— 否则从「编辑资料」返回要手动刷新才看得到。
+  static notifyProfileChanged(): void {
+    AppStorage.setOrCreate<number>('qfProfileTick', Date.now());
+  }
+
   static theme(): ThemeDef {
     return themeOf(AppState.instance.themeKey);
   }
@@ -72,6 +84,13 @@ export class AppState {
     if (s.user === null) {
       s.user = AppState.guestUser();
       Store.setObj(KEY_USER, s.user);
+    } else {
+      // 旧档归一：等级保留、进度百分比折算到三端统一标尺，有变化才写回
+      const before: string = s.user.level + ':' + s.user.exp + ':' + s.user.nextLevelExp;
+      normalizeLevel(s.user);
+      if (before !== s.user.level + ':' + s.user.exp + ':' + s.user.nextLevelExp) {
+        Store.setObj(KEY_USER, s.user);
+      }
     }
     s.themeKey = await Store.getStr(KEY_THEME, 'green') as ThemeKey;
 
@@ -119,6 +138,8 @@ export class AppState {
       if (s.badges.length === 0) {
         s.badges = AppState.copyBadges(BADGE_CATALOG);
         Store.setArr(AppState.dk(KEY_BADGES), s.badges);
+      } else {
+        s.badges = AppState.reconcileBadges(s.badges);
       }
     } else {
       // 游客态不保留业务数据：一律从空白开始（待办给引导项）
@@ -142,6 +163,42 @@ export class AppState {
     s.stats = await Store.getObj<Record<string, DailyStats>>(AppState.dk(KEY_STATS)) ?? {};
     s.challengeGoal = await Store.getInt(AppState.dk(KEY_CHALLENGE_GOAL), 4);
     s.badges = await Store.getArr<BadgeItem>(AppState.dk(KEY_BADGES));
+    if (s.badges.length > 0) {
+      s.badges = AppState.reconcileBadges(s.badges);
+    }
+  }
+
+  // 旧存档里的徽章缺少 iconKey（当时用 emoji），名称/描述也可能被早期版本改写过；
+  // 这里一律按 BADGE_CATALOG 校正展示字段（name / desc / icon / iconKey），
+  // 只覆盖展示字段，不触碰 unlocked / unlockedAt / tier 的进度。
+  private static reconcileBadges(src: BadgeItem[]): BadgeItem[] {
+    const out: BadgeItem[] = [];
+    for (let i = 0; i < src.length; i++) {
+      const b: BadgeItem = src[i];
+      const cat: BadgeItem | undefined = AppState.catalogOf(b.id);
+      const key: string = b.iconKey !== undefined && b.iconKey !== '' ? b.iconKey : badgeIconKey(b.id);
+      const item: BadgeItem = {
+        id: b.id,
+        name: cat !== undefined ? cat.name : b.name,
+        desc: cat !== undefined ? cat.desc : b.desc,
+        icon: cat !== undefined ? cat.icon : b.icon,
+        iconKey: key,
+        unlocked: b.unlocked,
+        unlockedAt: b.unlockedAt,
+        tier: b.tier !== undefined ? b.tier : 0
+      };
+      out.push(item);
+    }
+    return out;
+  }
+
+  private static catalogOf(id: string): BadgeItem | undefined {
+    for (let i = 0; i < BADGE_CATALOG.length; i++) {
+      if (BADGE_CATALOG[i].id === id) {
+        return BADGE_CATALOG[i];
+      }
+    }
+    return undefined;
   }
 
   private static copyBadges(src: BadgeItem[]): BadgeItem[] {
@@ -153,8 +210,10 @@ export class AppState {
         name: b.name,
         desc: b.desc,
         icon: b.icon,
+        iconKey: b.iconKey,
         unlocked: b.unlocked,
-        unlockedAt: b.unlockedAt
+        unlockedAt: b.unlockedAt,
+        tier: b.tier
       };
       out.push(item);
     }
@@ -168,7 +227,7 @@ export class AppState {
       { id: 'guide_1', title: '待办是什么：把任务拆成一个个番茄，逐个专注完成', durationMin: 25, status: 'todo', difficulty: 'easy', order: 0, createdAt: now, bgSeed: 'sky' },
       { id: 'guide_2', title: '怎么添加：点右下角「＋」新增待办，可自定义时长', durationMin: 25, status: 'todo', difficulty: 'easy', order: 1, createdAt: now, bgSeed: 'mist' },
       { id: 'guide_3', title: '怎么删除：在待办卡片上向左滑动即可删除', durationMin: 25, status: 'todo', difficulty: 'easy', order: 2, createdAt: now, bgSeed: 'dusk' },
-      { id: 'guide_4', title: '怎么开始：点待办右侧的「开始」，进入番茄计时并种下一棵树', durationMin: 25, status: 'todo', difficulty: 'easy', order: 3, createdAt: now, bgSeed: 'sky' }
+      { id: 'guide_4', title: '怎么开始：点待办右侧的「开始」，进入番茄计时并种下一棵番茄', durationMin: 25, status: 'todo', difficulty: 'easy', order: 3, createdAt: now, bgSeed: 'sky' }
     ];
   }
 
@@ -244,11 +303,54 @@ export class AppState {
           if (p['streak'] !== undefined) u.streak = p['streak'] as number;
           if (p['lastSignDate'] !== undefined) u.lastSignDate = p['lastSignDate'] as string;
           if (p['signDates'] !== undefined) u.signDates = p['signDates'] as string[];
+          // 昵称 / 头像 / 个性签名也参与跨端同步：别的端（Web / 小程序）改完名字，
+          // 本端拉到云端后要能看到，否则「改了三端还是显示鸿蒙端那个名字」。
+          // 刚在本地保存过（4 秒内）时以本地为准，避免把自己刚写上去的值又读回来。
+          const localWins: boolean = Date.now() - AppState.lastProfilePushAt < 4000;
+          if (!localWins) {
+            let changed: boolean = false;
+            if (p['nickname'] !== undefined && String(p['nickname']).length > 0
+              && String(p['nickname']) !== u.nickname) {
+              u.nickname = String(p['nickname']);
+              changed = true;
+            }
+            if (p['avatarSeed'] !== undefined && String(p['avatarSeed']).length > 0
+              && String(p['avatarSeed']) !== u.avatarSeed) {
+              u.avatarSeed = String(p['avatarSeed']);
+              changed = true;
+            }
+            // 签名允许为空字符串（用户主动清空），所以这里不做非空判断
+            if (p['bio'] !== undefined && String(p['bio']) !== u.bio) {
+              u.bio = String(p['bio']);
+              changed = true;
+            }
+            if (changed) {
+              AppState.notifyProfileChanged();
+            }
+          }
+          // 等级 / 经验按三端统一标尺归一（别的端可能还带着旧标尺的值）
+          normalizeLevel(u);
           await Store.setObj(KEY_USER, u);
         }
         if (p['challengeGoal'] !== undefined) {
           AppState.instance.challengeGoal = p['challengeGoal'] as number;
           Store.setInt(AppState.dk(KEY_CHALLENGE_GOAL), AppState.instance.challengeGoal);
+        }
+        // 月度冠军跨设备合并：月份取并集，次数取较大值
+        const uu = AppState.instance.user;
+        if (uu !== null) {
+          if (p['championCount'] !== undefined) {
+            uu.championCount = p['championCount'] as number;
+          }
+          const rm: string[] = (p['championMonths'] !== undefined) ? (p['championMonths'] as string[]) : [];
+          const lm: string[] = uu.championMonths ?? [];
+          const merged: string[] = [];
+          for (let i = 0; i < lm.length; i++) { if (merged.indexOf(lm[i]) < 0) merged.push(lm[i]); }
+          for (let i = 0; i < rm.length; i++) { if (merged.indexOf(rm[i]) < 0) merged.push(rm[i]); }
+          if (merged.length > 0) { uu.championMonths = merged; }
+          uu.championCount = Math.max(uu.championCount ?? 0, merged.length);
+          if (p['tomatoCleared'] !== undefined) { uu.tomatoCleared = p['tomatoCleared'] as number; }
+          await Store.setObj(KEY_USER, uu);
         }
       }
     } catch (e) {
@@ -271,6 +373,12 @@ export class AppState {
     profile['nickname'] = u.nickname;
     profile['avatarSeed'] = u.avatarSeed;
     profile['bio'] = u.bio;
+    profile['bonusTrees'] = u.bonusTrees ?? 0;
+    profile['championCount'] = u.championCount ?? 0;
+    profile['championMonths'] = u.championMonths ?? [];
+    profile['tomatoCleared'] = u.tomatoCleared ?? 0;
+    // 记下推送时刻：紧接着的云端拉取不要用旧值覆盖刚保存的内容
+    AppState.lastProfilePushAt = Date.now();
     CloudDataService.saveProfile(AppState.userKey(), profile).catch((e: Object) => {
       console.warn('saveProfile failed: ' + e);
     });
@@ -368,7 +476,7 @@ export class AppState {
       bio: '登录后保存你的专注数据',
       level: 1,
       exp: 0,
-      nextLevelExp: 3000,
+      nextLevelExp: expForLevel(1),
       streak: 0,
       lastSignDate: '',
       signDates: [],
@@ -399,6 +507,184 @@ export class AppState {
       m += AppState.instance.stats[keys[i]].focusMinutes;
     }
     return m;
+  }
+
+  static totalPomodoros(): number {
+    let t = 0;
+    const keys: string[] = Object.keys(AppState.instance.stats);
+    for (let i = 0; i < keys.length; i++) {
+      t += AppState.instance.stats[keys[i]].pomodoroCount;
+    }
+    return t;
+  }
+
+  static totalInterrupts(): number {
+    let t = 0;
+    const keys: string[] = Object.keys(AppState.instance.stats);
+    for (let i = 0; i < keys.length; i++) {
+      const ic: Record<string, number> = AppState.instance.stats[keys[i]].interruptCounts;
+      const rk: string[] = Object.keys(ic);
+      for (let j = 0; j < rk.length; j++) {
+        t += ic[rk[j]];
+      }
+    }
+    return t;
+  }
+
+  // 番茄园统计：每完成 10 个番茄种植 1 棵；枯萎=每 3 次中断 1 棵；清除 1 棵消耗 2 个专注番茄
+  static tomatoStats(): TomatoStats {
+    const u = AppState.instance.user;
+    const pomo = AppState.totalPomodoros();
+    const bonus = u?.bonusTrees ?? 0;
+    const deadTotal = Math.floor(AppState.totalInterrupts() / 3);
+    const cleared = Math.min(u?.tomatoCleared ?? 0, deadTotal);
+    const dead = deadTotal - cleared;
+    const harvested = Math.floor(pomo / POMODOROS_PER_TOMATO) + bonus;
+    const focusAvailable = Math.max(0, pomo - cleared * 2);
+    let level = TOMATO_LEVELS[0].name;
+    for (let i = 0; i < TOMATO_LEVELS.length; i++) {
+      if (harvested >= TOMATO_LEVELS[i].at) level = TOMATO_LEVELS[i].name;
+    }
+    let nextAt = 0;
+    for (let i = 1; i < TOMATO_LEVELS.length; i++) {
+      if (harvested < TOMATO_LEVELS[i].at) { nextAt = TOMATO_LEVELS[i].at; break; }
+    }
+    let start = 0;
+    for (let i = 0; i < TOMATO_LEVELS.length; i++) {
+      if (harvested >= TOMATO_LEVELS[i].at) start = TOMATO_LEVELS[i].at;
+    }
+    const pct = nextAt > 0 ? Math.min(100, Math.round((harvested - start) / (nextAt - start) * 100)) : 100;
+    const st: TomatoStats = {
+      pomo: pomo, harvested: harvested, alive: harvested, dead: dead, cleared: cleared,
+      focusAvailable: focusAvailable, level: level, nextAt: nextAt, pct: pct
+    };
+    return st;
+  }
+
+  static tomatoHint(): string {
+    const s = AppState.tomatoStats();
+    if (s.nextAt <= 0) return '你的番茄园已满级，继续收获吧！';
+    let nextName = '';
+    for (let i = 0; i < TOMATO_LEVELS.length; i++) {
+      if (TOMATO_LEVELS[i].at === s.nextAt) nextName = TOMATO_LEVELS[i].name;
+    }
+    return '再收获 ' + (s.nextAt - s.harvested) + ' 个番茄，升级到「' + nextName + '」';
+  }
+
+  static tomatoCells(): TomatoCell[] {
+    const s = AppState.tomatoStats();
+    const MIN = 8;
+    const MAX = 12;
+    const total = s.alive + s.dead;
+    const out: TomatoCell[] = [];
+    if (total > MAX) {
+      const showAlive = Math.min(s.alive, MAX - 1);
+      const showDead = Math.min(s.dead, MAX - 1 - showAlive);
+      for (let i = 0; i < showAlive; i++) out.push({ state: 'tomato', idx: i, more: 0 });
+      for (let i = 0; i < showDead; i++) out.push({ state: 'dead', idx: 100 + i, more: 0 });
+      out.push({ state: 'more', idx: 300, more: total - out.length });
+      return out;
+    }
+    for (let i = 0; i < s.alive; i++) out.push({ state: 'tomato', idx: i, more: 0 });
+    for (let i = 0; i < s.dead; i++) out.push({ state: 'dead', idx: 100 + i, more: 0 });
+    const target = Math.max(MIN, total);
+    while (out.length < target) out.push({ state: 'empty', idx: 200 + out.length, more: 0 });
+    return out;
+  }
+
+  static clearDead(): boolean {
+    const s = AppState.tomatoStats();
+    const u = AppState.instance.user;
+    if (u === null) return false;
+    if (s.dead <= 0 || s.focusAvailable < 2) return false;
+    u.tomatoCleared = (u.tomatoCleared ?? 0) + 1;
+    AppState.saveUser();
+    return true;
+  }
+
+  static todayPlanted(): number {
+    const s = AppState.instance.stats[AppState.todayKey()];
+    return Math.floor((s ? s.pomodoroCount : 0) / POMODOROS_PER_TOMATO);
+  }
+
+  static todayProgress(): number {
+    const s = AppState.instance.stats[AppState.todayKey()];
+    return (s ? s.pomodoroCount : 0) % POMODOROS_PER_TOMATO;
+  }
+
+  static getChampionCount(): number {
+    const u = AppState.instance.user;
+    if (u === null) return 0;
+    const months: string[] = u.championMonths ?? [];
+    return Math.max(u.championCount ?? 0, months.length);
+  }
+
+  // 累计番茄个数（所有日期累加）→ 复用 totalPomodoros()
+  // 累计专注分钟（所有日期累加）→ 复用 totalFocusMinutes()
+
+  // 徽章升阶重算（三端统一口径，2026-10-13）：
+  // b1 连续签到天数；b2 累计番茄个数；b3 累计专注分钟；b4 月度冠军次数。
+  // 阈值见 Types.BADGE_TIER_GOALS，解锁条件统一为「达到第一档」；
+  // tier 0=未解锁 / 1=青铜 / 2=白银 / 3=黄金 / 4=钻石。
+  // 返回是否有徽章发生变化（用于决定是否落盘，避免每次进页无谓写存储）。
+  static recalcBadges(): boolean {
+    const list = AppState.instance.badges;
+    if (list.length === 0) return false;
+    const streak = AppState.instance.user?.streak ?? 0;
+    const totalPomo = AppState.totalPomodoros();
+    const totalFocusMinutes = AppState.totalFocusMinutes();
+    const champion = AppState.getChampionCount();
+    let changed = false;
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i];
+      let progress = 0;
+      if (b.id === 'b1') progress = streak;
+      if (b.id === 'b2') progress = totalPomo;
+      if (b.id === 'b3') progress = totalFocusMinutes;
+      if (b.id === 'b4') progress = champion;
+      let tier = 0;
+      const goals: number[] | undefined = BADGE_TIER_GOALS[b.id];
+      if (goals !== undefined) {
+        for (let j = 0; j < goals.length; j++) {
+          if (progress >= goals[j]) {
+            tier = j + 1;
+          }
+        }
+      }
+      const unlocked = tier > 0;
+      if (b.tier !== tier || b.unlocked !== unlocked) {
+        changed = true;
+      }
+      b.tier = tier;
+      b.unlocked = unlocked;
+    }
+    if (changed) {
+      AppState.saveBadges();
+    }
+    return changed;
+  }
+
+  static recordChampion(): boolean {
+    const u = AppState.instance.user;
+    if (u === null) return false;
+    const d = new Date();
+    const month = d.getFullYear() + '-' + (d.getMonth() + 1);
+    const months: string[] = (u.championMonths ?? []).slice();
+    if (months.indexOf(month) > -1) return false;
+    months.push(month);
+    u.championMonths = months;
+    u.championCount = Math.max(u.championCount ?? 0, months.length - 1) + 1;
+    AppState.saveUser();
+    return true;
+  }
+
+  static allTasksDone(): boolean {
+    const tasks = AppState.instance.tasks;
+    if (tasks.length === 0) return false;
+    for (let i = 0; i < tasks.length; i++) {
+      if (tasks[i].status !== 'done') return false;
+    }
+    return true;
   }
 
   // 本地累计：本人在某房间的专注时长（分钟）
@@ -483,12 +769,7 @@ export class AppState {
     const today = AppState.todayKey();
     if (u.lastSignDate === today) return -1;
     const gain = u.streak >= 7 ? 15 : 10;
-    u.exp += gain;
-    while (u.exp >= u.nextLevelExp) {
-      u.level += 1;
-      u.exp = u.exp - u.nextLevelExp;
-      u.nextLevelExp = Math.floor(u.nextLevelExp * 1.5);
-    }
+    gainExp(u, gain);
     if (u.signDates.indexOf(today) < 0) {
       const next: string[] = [];
       for (let i = 0; i < u.signDates.length; i++) {

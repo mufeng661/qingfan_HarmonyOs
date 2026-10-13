@@ -1,14 +1,11 @@
 import { router } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
 import { AppState } from '../model/AppState';
-import { themeOf, THEMES, ThemeDef, ThemeKey, BadgeItem, FONT_DISPLAY } from '../model/Types';
+import { themeOf, THEMES, ThemeDef, ThemeKey, BadgeItem, FONT_DISPLAY, TomatoCell, BADGE_TIER_NAMES, expForLevel, tierOfLevel, LevelTier, firstCp } from '../model/Types';
 import { Store, todayKey } from '../model/Store';
 import { TabBar } from '../components/TabBar';
-
-interface ForestCell {
-  state: string;   // 'tree' | 'withered' | 'empty'
-  idx: number;
-}
+import { BadgeIcon } from '../components/BadgeIcon';
+import { CoinBadge } from '../components/CoinBadge';
 
 interface WeekCell {
   label: string;
@@ -24,6 +21,7 @@ struct Me {
   @State showBadge: boolean = false;
   @State settings: string = '';
   @State badgeIdx: number = 0;
+@State badgePreviewNext: boolean = false;
   @State notifyFocus: boolean = true;
   @State notifySign: boolean = true;
   @State notifyFriend: boolean = false;
@@ -33,6 +31,17 @@ struct Me {
   @State streakDays: number = 0;
   @State loggedIn: boolean = false;
   @State refreshing: boolean = false;
+  // 资料字段的 @State 镜像。
+  // AppState.instance.user 是普通对象，直接改它的属性不会触发渲染；而 uiTick 虽然一直在自增，
+  // 却从没被 build 读过（ArkUI 只重绘「读到了该状态」的节点），所以从「编辑资料」返回后
+  // 要手动下拉刷新才会显示新昵称/签名。这里把资料抄成 @State，配合下面的跨页广播即时更新。
+  @StorageLink('qfProfileTick') @Watch('onProfileTick') profileTick: number = 0;
+  @State pNick: string = '';
+  @State pBio: string = '';
+  @State pAvatar: string = '';
+  @State pLevel: number = 1;
+  @State pExp: number = 0;
+  @State pNextExp: number = 100;
   private t: ThemeDef = themeOf(AppState.instance.themeKey);
   private midnightTimerId: number = -1;
   private lastDayKey: string = '';
@@ -77,9 +86,30 @@ struct Me {
   syncUserState() {
     const s = AppState.recomputeStreak();
     AppState.saveUser();
+    // 「我的」页的徽章卡直接读 AppState.instance.badges，
+    // 这里即时按三端统一口径重算，才能和「我的徽章」页、Web/小程序端保持一致
+    // （否则刚解锁的徽章要先进一次徽章页才会变亮）。
+    AppState.recalcBadges();
     this.loggedIn = AppState.isLoggedIn();
     this.signedToday = AppState.isSignedToday();
     this.streakDays = s;
+    this.pullProfile();
+  }
+
+  // 把资料从 AppState 抄进 @State 镜像（只有读到 UI 上的状态才可观察）
+  pullProfile(): void {
+    const u = AppState.instance.user;
+    this.pNick = u?.nickname ?? '林小满';
+    this.pBio = u?.bio ?? '把专注，种成一片番茄园';
+    this.pAvatar = u?.avatarSeed ?? '';
+    this.pLevel = u?.level ?? 1;
+    this.pExp = u?.exp ?? 0;
+    this.pNextExp = u?.nextLevelExp ?? expForLevel(1);
+  }
+
+  // 别的页面（编辑资料）或云端同步改了资料时，立刻刷新镜像 —— 不再需要手动刷新
+  onProfileTick() {
+    this.pullProfile();
   }
 
   signGain(): number {
@@ -103,9 +133,8 @@ struct Me {
           Scroll() {
             Column() {
               this.profileHeader()
-              this.expCard()
               this.signCard()
-              this.forestCard()
+              this.tomatoCard()
               this.weekCard()
               this.badgeCard()
               this.totalCard()
@@ -155,7 +184,7 @@ struct Me {
           .fontSize(30)
           .fontColor(this.t.ink)
           .margin({ top: 8 })
-        Text('把专注，种成一片森林')
+        Text('把专注，种成一片番茄园')
           .fontFamily(FONT_DISPLAY)
           .fontSize(14)
           .fontColor(this.t.ink2)
@@ -218,96 +247,119 @@ struct Me {
     .padding({ top: 10, bottom: 10 })
   }
 
-  // ====== 个人信息 ======
+  // ====== 个人信息 + 等级卡片（仿小黑盒） ======
   @Builder
   profileHeader() {
-    Row({ space: 14 }) {
-      Stack({ alignContent: Alignment.BottomEnd }) {
-        Column() {
-          Text(this.firstChar())
-            .fontSize(24).fontWeight(FontWeight.Medium).fontColor('#FFFFFF')
-        }
-        .width(58).height(58)
-        .borderRadius(29)
-        .linearGradient({ angle: 135, colors: [[this.t.leaf, 0], [this.t.leafDeep, 1]] })
-        .justifyContent(FlexAlign.Center)
-
-        Text('Lv.' + (AppState.instance.user?.level ?? 1))
-          .fontSize(10).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-          .backgroundColor(this.t.gold)
-          .borderRadius(99)
-          .border({ width: 2, color: '#FFFFFF' })
-          .offset({ x: 2, y: 2 })
-      }
-
+    Stack({ alignContent: Alignment.TopStart }) {
+      // 渐变背景卡
       Column() {
-        Row({ space: 6 }) {
-          Text(AppState.instance.user?.nickname ?? '林小满')
-            .fontSize(18).fontWeight(FontWeight.Medium).fontColor(this.t.ink)
-          Text('›').fontSize(14).fontColor(this.t.ink3)
+        Row({ space: 14 }) {
+          // 头像 + 等级徽章
+          Stack({ alignContent: Alignment.BottomEnd }) {
+            Column() {
+              Text(this.firstChar())
+                .fontSize(24).fontWeight(FontWeight.Medium).fontColor('#FFFFFF')
+            }
+            .width(58).height(58)
+            .borderRadius(29)
+            .linearGradient({ angle: 135, colors: [['rgba(255,255,255,0.3)', 0], ['rgba(255,255,255,0.08)', 1]] })
+            .border({ width: 2, color: 'rgba(255,255,255,0.4)' })
+            .justifyContent(FlexAlign.Center)
+
+            Text('Lv.' + this.pLevel)
+              .fontSize(10).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+              .padding({ left: 7, right: 7, top: 2, bottom: 2 })
+              .backgroundColor(this.tierColor())
+              .borderRadius(99)
+              .border({ width: 2, color: '#FFFFFF' })
+              .offset({ x: 2, y: 2 })
+          }
+
+          // 昵称 + 段位名
+          Column() {
+            Row({ space: 6 }) {
+              Text(this.pNick)
+                .fontSize(18).fontWeight(FontWeight.Medium).fontColor('#FFFFFF')
+              Text('›').fontSize(14).fontColor('rgba(255,255,255,0.5)')
+            }
+            Row({ space: 6 }) {
+              Text(this.pBio)
+                .fontSize(12).fontColor('rgba(255,255,255,0.7)')
+                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                .layoutWeight(1)
+            }
+            .margin({ top: 5 })
+          }
+          .alignItems(HorizontalAlign.Start)
+          .layoutWeight(1)
         }
-        Text(AppState.instance.user?.bio ?? '把专注，种成一片森林')
-          .fontSize(12).fontColor(this.t.ink2)
-          .margin({ top: 3 })
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .alignItems(HorizontalAlign.Start)
-      .layoutWeight(1)
-    }
-    .width('100%')
-    .margin({ bottom: 18 })
-    .onClick(() => { router.pushUrl({ url: 'pages/EditProfile' }); })
-  }
-
-  firstChar(): string {
-    const n = AppState.instance.user?.nickname ?? '林小满';
-    return n.slice(0, 1);
-  }
-
-  // ====== 经验值 ======
-  @Builder
-  expCard() {
-    Column() {
-      Row() {
-        Text('经验值').fontSize(13).fontColor(this.t.ink2)
-        Blank()
-        Text() {
-          Span((AppState.instance.user?.exp ?? 0) + '').fontFamily(FONT_DISPLAY).fontSize(15).fontColor(this.t.ink)
-          Span(' / ' + (AppState.instance.user?.nextLevelExp ?? 3000)).fontSize(11).fontColor(this.t.ink3)
-        }
-      }
-      .width('100%')
-      .margin({ bottom: 10 })
-
-      Stack() {
-        Row().width('100%').height(8).borderRadius(99).backgroundColor(this.t.surface2)
-        Row().width(this.expPct() + '%').height(8).borderRadius(99)
-          .linearGradient({ angle: 90, colors: [[this.t.leaf, 0], [this.t.gold, 1]] })
-      }
-      .width('100%')
-
-      Text('再获得 ' + (this.expMax() - (AppState.instance.user?.exp ?? 0)) + ' 经验升级到 Lv.' + ((AppState.instance.user?.level ?? 1) + 1))
-        .fontSize(11).fontColor(this.t.ink3)
-        .margin({ top: 8 })
         .width('100%')
+        .padding({ left: 20, right: 20, top: 20, bottom: 16 })
+
+        // 经验进度条区域
+        Column() {
+          Row() {
+            Text('经验值').fontSize(12).fontColor('rgba(255,255,255,0.6)')
+            Blank()
+            Text() {
+              Span(this.pExp + '').fontFamily(FONT_DISPLAY).fontSize(15).fontColor('#FFFFFF')
+              Span(' / ' + this.pNextExp).fontSize(11).fontColor('rgba(255,255,255,0.5)')
+            }
+          }
+          .width('100%')
+          .margin({ bottom: 8 })
+
+          Stack({ alignContent: Alignment.Start }) {
+            Row().width('100%').height(8).borderRadius(99)
+              .backgroundColor('rgba(255,255,255,0.12)')
+            Row().width(this.expPct() + '%').height(8).borderRadius(99)
+              .linearGradient({ angle: 90, colors: [['rgba(255,255,255,0.6)', 0], ['#FFFFFF', 1]] })
+          }
+          .width('100%')
+
+          Text('再获得 ' + (this.expMax() - this.pExp) + ' 经验升级到 Lv.' + (this.pLevel + 1))
+            .fontSize(11).fontColor('rgba(255,255,255,0.4)')
+            .margin({ top: 8 })
+            .width('100%')
+        }
+        .width('100%')
+        .padding({ left: 20, right: 20, bottom: 18 })
+      }
+      .width('100%')
+      .borderRadius(20)
+      .linearGradient({ angle: 140, colors: [[this.tierBgFrom(), 0], [this.tierBgTo(), 1]] })
+      .onClick(() => { router.pushUrl({ url: 'pages/EditProfile' }); })
     }
     .width('100%')
-    .padding({ left: 18, right: 18, top: 16, bottom: 16 })
-    .backgroundColor(this.t.surface)
-    .borderRadius(18)
-    .border({ width: 1, color: this.t.line })
     .margin({ bottom: 16 })
   }
 
+  tierColor(): string {
+    return tierOfLevel(this.pLevel).color;
+  }
+
+  tierBgFrom(): string {
+    return tierOfLevel(this.pLevel).bgFrom;
+  }
+
+  tierBgTo(): string {
+    return tierOfLevel(this.pLevel).bgTo;
+  }
+
+  firstChar(): string {
+    // 优先用「编辑资料」里挑的自定义头像；没挑过则退回昵称首字。
+    // 用 firstCp 按码点取，emoji 昵称不会被劈成半个字符。
+    if (this.pAvatar.length > 0) return firstCp(this.pAvatar);
+    return firstCp(this.pNick);
+  }
+
   expMax(): number {
-    return AppState.instance.user?.nextLevelExp ?? 3000;
+    return this.pNextExp;
   }
 
   expPct(): number {
-    const u = AppState.instance.user;
-    if (!u || u.nextLevelExp <= 0) return 0;
-    return Math.min(100, Math.round(u.exp / u.nextLevelExp * 100));
+    if (this.pNextExp <= 0) return 0;
+    return Math.min(100, Math.round(this.pExp / this.pNextExp * 100));
   }
 
   // ====== 签到 ======
@@ -361,67 +413,75 @@ struct Me {
     promptAction.showToast({ message: '签到成功 +' + gain + ' 经验', duration: 1500 });
   }
 
-  // ====== 我的森林 ======
+  // ====== 我的番茄园 ======
   @Builder
-  forestCard() {
+  tomatoCard() {
     Column() {
       Row() {
         Row({ space: 10 }) {
-          Text('我的森林').fontFamily(FONT_DISPLAY).fontSize(16).fontColor(this.t.ink)
-          Text(this.forestLevel()).fontSize(11).fontWeight(FontWeight.Medium)
+          Text('我的番茄园').fontFamily(FONT_DISPLAY).fontSize(16).fontColor(this.t.ink)
+          Text(AppState.tomatoStats().level).fontSize(11).fontWeight(FontWeight.Medium)
             .padding({ left: 9, right: 9, top: 3, bottom: 3 })
             .borderRadius(99)
-            .backgroundColor(this.forestLevelBg())
-            .fontColor(this.forestLevelColor())
+            .backgroundColor(this.t.tomatoSoft)
+            .fontColor(this.t.tomato)
         }
         Blank()
-        Text('已种 ' + this.trees() + ' 棵 · 枯萎 ' + this.withered() + ' 棵')
+        Text('今日 +' + AppState.todayPlanted() + ' · 进度 ' + AppState.todayProgress() + '/10')
           .fontSize(11).fontColor(this.t.ink3)
+      }
+      .width('100%')
+      .margin({ bottom: 10 })
+
+      Stack({ alignContent: Alignment.Start }) {
+        Row().width('100%').height(8).borderRadius(99).backgroundColor(this.t.surface2)
+        Row().width(AppState.tomatoStats().pct + '%').height(8).borderRadius(99)
+          .linearGradient({ angle: 90, colors: [[this.t.leaf, 0], [this.t.tomato, 1]] })
       }
       .width('100%')
       .margin({ bottom: 12 })
 
       Grid() {
-        ForEach(this.forestCells(), (c: ForestCell) => {
+        ForEach(AppState.tomatoCells(), (c: TomatoCell) => {
           GridItem() {
-            Stack() {
-              Column() {
-                if (c.state === 'tree') {
-                  Text('🌳').fontSize(26).fontColor(this.t.leafDeep)
-                } else if (c.state === 'withered') {
-                  Text('🌳').fontSize(26).fontColor(this.t.ink3).opacity(0.75)
-                } else {
-                  Text('+').fontSize(18).fontColor(this.t.ink3)
-                }
-              }
-              .width('100%').height('100%')
-              .borderRadius(14)
-              .backgroundColor(c.state === 'tree' ? this.t.leafSoft : (c.state === 'withered' ? this.t.surface2 : Color.Transparent))
-              .border(c.state === 'empty' ? { width: 1.5, color: this.t.line, style: BorderStyle.Dashed } : { width: 0 })
-              .justifyContent(FlexAlign.Center)
-
-              if (c.state === 'withered') {
-                Text('50').fontSize(9).fontWeight(FontWeight.Bold).fontColor(this.t.tomato)
-                  .margin({ right: 5, bottom: 4 })
-                  .align(Alignment.BottomEnd)
+            Column() {
+              if (c.state === 'tomato') {
+                Text('🍅').fontSize(26)
+              } else if (c.state === 'dead') {
+                Text('🥀').fontSize(24).opacity(0.7)
+              } else if (c.state === 'more') {
+                Text('+' + c.more).fontSize(14).fontWeight(FontWeight.Bold).fontColor(this.t.tomato)
+              } else {
+                Text('+').fontSize(18).fontColor(this.t.ink3)
               }
             }
             .width('100%').height(50)
+            .borderRadius(14)
+            .backgroundColor(c.state === 'empty' ? Color.Transparent : (c.state === 'more' ? this.t.tomatoSoft : this.t.surface))
+            .border(c.state === 'empty' ? { width: 1.5, color: this.t.line, style: BorderStyle.Dashed } : { width: 0 })
+            .justifyContent(FlexAlign.Center)
             .onClick(() => {
-              if (c.state === 'withered') this.revive();
+              if (c.state === 'dead') this.clearDead();
             })
           }
-        }, (c: ForestCell) => c.idx + '_' + c.state)
+        }, (c: TomatoCell) => c.idx + '_' + c.state)
       }
       .columnsTemplate('1fr 1fr 1fr 1fr')
       .columnsGap(10)
       .rowsGap(10)
       .width('100%')
 
-      Text(this.forestHint())
+      Text('已种植 ' + AppState.tomatoStats().harvested + ' 棵 · 枯萎 ' + AppState.tomatoStats().dead + ' 棵')
         .fontSize(11).fontColor(this.t.ink3)
-        .margin({ top: 10 })
-        .width('100%')
+        .margin({ top: 10 }).width('100%')
+      Text(AppState.tomatoHint())
+        .fontSize(11).fontColor(this.t.ink3)
+        .margin({ top: 4 }).width('100%')
+      if (AppState.tomatoStats().dead > 0) {
+        Text('可用专注番茄 ' + AppState.tomatoStats().focusAvailable + ' · 点击枯萎番茄消耗 2 个清除')
+          .fontSize(11).fontColor(this.t.tomato)
+          .margin({ top: 4 }).width('100%')
+      }
     }
     .width('100%')
     .padding({ left: 18, right: 18, top: 16, bottom: 16 })
@@ -432,98 +492,20 @@ struct Me {
   }
 
   totalPomodoros(): number {
-    let t = 0;
-    Object.keys(AppState.instance.stats).forEach(k => { t += AppState.instance.stats[k].pomodoroCount; });
-    return t;
+    return AppState.totalPomodoros();
   }
 
-  // 每积累 10 个番茄点亮 1 棵树苗；复活获得的是额外树苗
-  trees(): number {
-    const bonus = AppState.instance.user?.bonusTrees ?? 0;
-    return Math.floor(this.totalPomodoros() / 10) + bonus;
-  }
-
-  withered(): number {
-    let t = 0;
-    Object.keys(AppState.instance.stats).forEach(k => {
-      const ic = AppState.instance.stats[k].interruptCounts;
-      Object.keys(ic).forEach(r => { t += ic[r]; });
-    });
-    return Math.floor(t / 3);
-  }
-
-  forestLevel(): string {
-    const t = this.trees();
-    if (t < 5) return '小树苗';
-    if (t < 15) return '青葱密林';
-    if (t < 30) return '古老森林';
-    return '梦幻森林';
-  }
-
-  forestLevelBg(): string {
-    const t = this.trees();
-    if (t < 5) return '#E8F0E3';
-    if (t < 15) return '#F4E8CE';
-    if (t < 30) return '#DCE8CF';
-    return '#EDE3F0';
-  }
-
-  forestLevelColor(): string {
-    const t = this.trees();
-    if (t < 5) return '#6E9B57';
-    if (t < 15) return '#D9A441';
-    if (t < 30) return '#2C3A28';
-    return '#8B6E9B';
-  }
-
-  forestHint(): string {
-    const t = this.trees();
-    const next = t < 5 ? 5 : t < 15 ? 15 : 30;
-    let s = '';
-    if (t < 30) {
-      const name = t < 5 ? '青葱密林' : t < 15 ? '古老森林' : '梦幻森林';
-      s = '再种 ' + (next - t) + ' 棵升级到「' + name + '」';
-    } else {
-      s = '你的森林已达最高等级，继续种下去吧！';
-    }
-    if (this.withered() > 0) s += ' · 点击枯萎树消耗 50 经验复活';
-    return s;
-  }
-
-  forestCells(): ForestCell[] {
-    const out: ForestCell[] = [];
-    const t = this.trees();
-    const w = this.withered();
-    for (let i = 0; i < t; i++) out.push({ state: 'tree', idx: i });
-    for (let i = 0; i < w; i++) out.push({ state: 'withered', idx: 100 + i });
-    while (out.length < 8) out.push({ state: 'empty', idx: 200 + out.length });
-    return out.slice(0, 12);
-  }
-
-  revive() {
-    const u = AppState.instance.user;
-    if (!u) return;
-    if (this.withered() <= 0) return;
-    if (u.exp < 50) {
-      promptAction.showToast({ message: '经验不足，再专注几次来复活它吧', duration: 1500 });
+  clearDead() {
+    const s = AppState.tomatoStats();
+    if (s.dead <= 0) return;
+    if (s.focusAvailable < 2) {
+      promptAction.showToast({ message: '专注番茄不足，需要 2 个才能清除', duration: 1500 });
       return;
     }
-    u.exp -= 50;
-    u.bonusTrees = (u.bonusTrees ?? 0) + 1;
-    const k = todayKey();
-    const s = AppState.instance.stats[k];
-    if (s) {
-      let total = 0;
-      Object.keys(s.interruptCounts).forEach(r => { total += s.interruptCounts[r]; });
-      if (total > 0) {
-        const r = Object.keys(s.interruptCounts).reduce((a, b) => s.interruptCounts[a] > s.interruptCounts[b] ? a : b);
-        s.interruptCounts[r] = Math.max(0, s.interruptCounts[r] - 1);
-      }
+    if (AppState.clearDead()) {
+      this.uiTick += 1;
+      promptAction.showToast({ message: '已清除 1 棵枯萎番茄 🥀', duration: 1500 });
     }
-    AppState.saveStats();
-    AppState.saveUser();
-    this.uiTick += 1;
-    promptAction.showToast({ message: '成功复活 1 棵树，森林又绿了 🌿', duration: 1500 });
   }
 
   // ====== 本周打卡 ======
@@ -596,8 +578,17 @@ struct Me {
       Row({ space: 12 }) {
         ForEach(AppState.instance.badges, (b: BadgeItem, i: number) => {
           Column({ space: 7 }) {
-            Text(b.icon).fontSize(24).fontColor(b.unlocked ? this.badgeColor(b) : this.t.ink3)
-              .opacity(b.unlocked ? 1 : 0.5)
+            Stack({ alignContent: Alignment.BottomEnd }) {
+              BadgeIcon({
+                iconKey: b.iconKey,
+                iconSize: 24,
+                color: this.badgeColor(b)
+              })
+              if (!b.unlocked) {
+                BadgeIcon({ iconKey: 'lock', iconSize: 12, color: this.t.ink3 })
+                  .margin({ right: -7, bottom: -7 })
+              }
+            }
             Text(b.name).fontSize(11).fontColor(this.t.ink2)
           }
           .layoutWeight(1)
@@ -605,12 +596,13 @@ struct Me {
           .backgroundColor(this.t.surface)
           .borderRadius(16)
           .border({ width: 1, color: this.t.line })
-          .opacity(b.unlocked ? 1 : 0.6)
+          .opacity(b.unlocked ? 1 : 0.5)
           .onClick(() => {
             this.badgeIdx = i;
+            this.badgePreviewNext = false;
             this.showBadge = true;
           })
-        }, (b: BadgeItem) => b.id)
+        }, (b: BadgeItem) => b.id + '-' + b.tier + '-' + (b.unlocked ? 1 : 0))
       }
       .width('100%')
     }
@@ -618,15 +610,30 @@ struct Me {
     .margin({ bottom: 20 })
   }
 
+  // 已获得：flame/tomato → 番茄红，其余 → 叶绿；未解锁：ink3（对齐小程序）
   badgeColor(b: BadgeItem): string {
-    if (b.id === 'b1') return this.t.tomato;
-    return this.t.leafDeep;
+    if (!b.unlocked) {
+      return this.t.ink3;
+    }
+    return (b.iconKey === 'flame' || b.iconKey === 'tomato') ? this.t.tomato : this.t.leafDeep;
   }
 
   currentBadge(): BadgeItem | undefined {
     const list = AppState.instance.badges;
     if (this.badgeIdx < 0 || this.badgeIdx >= list.length) return undefined;
     return list[this.badgeIdx];
+  }
+
+  // 稀有度阶段取值：已解锁至少青铜（旧存档可能 unlocked=true 但 tier 缺失/为 0），未解锁为灰
+  tierOf(b: BadgeItem): number {
+    const t = b.tier;
+    if (b.unlocked) {
+      if (t === undefined || t < 1 || t > 4) {
+        return 1;
+      }
+      return t;
+    }
+    return 0;
   }
 
   // ====== 累计数据 ======
@@ -806,6 +813,12 @@ struct Me {
       this.settingItem('🔒', '隐私设置', '公开时长、在线状态', 'privacy')
       Divider().color(this.t.line)
       this.settingItem('🌿', '关于青番', 'v1.0.0 · AI 番茄钟', 'about')
+      Divider().color(this.t.line)
+      this.settingItem('📄', '用户协议', '查看服务条款', 'agreement-user')
+      Divider().color(this.t.line)
+      this.settingItem('🔐', '隐私政策', '我们如何保护你的数据', 'agreement-privacy')
+      Divider().color(this.t.line)
+      this.settingItem('✉️', '意见反馈', '把建议告诉我们', 'feedback')
     }
     .width('100%')
     .padding({ left: 18, right: 18, top: 6, bottom: 6 })
@@ -837,7 +850,19 @@ struct Me {
     }
     .width('100%')
     .padding({ top: 13, bottom: 13 })
-    .onClick(() => { this.settings = key; })
+    .onClick(() => {
+      if (key === 'about') {
+        router.pushUrl({ url: 'pages/About' });
+      } else if (key === 'agreement-user') {
+        router.pushUrl({ url: 'pages/Agreement', params: { type: 'user' } });
+      } else if (key === 'agreement-privacy') {
+        router.pushUrl({ url: 'pages/Agreement', params: { type: 'privacy' } });
+      } else if (key === 'feedback') {
+        router.pushUrl({ url: 'pages/Feedback' });
+      } else {
+        this.settings = key;
+      }
+    })
   }
 
   // ====== 退出登录 ======
@@ -910,36 +935,58 @@ struct Me {
         .onClick(() => { this.showBadge = false; })
       if (this.currentBadge() !== undefined) {
         Column() {
-          Column() {
-            Text(this.currentBadge()!.icon).fontSize(30).fontColor(this.currentBadge()!.unlocked ? this.badgeColor(this.currentBadge()!) : this.t.ink3)
+          // 右上角：下一等级预览按钮（已解锁且未满级时显示）
+          Row() {
+            Blank()
+            if (this.currentBadge()!.unlocked && this.tierOf(this.currentBadge()!) >= 1
+              && this.tierOf(this.currentBadge()!) < 4) {
+              Text(this.badgePreviewNext
+                ? '返回当前等级'
+                : '下一等级 · ' + BADGE_TIER_NAMES[this.tierOf(this.currentBadge()!) + 1])
+                .fontSize(11.5).fontWeight(FontWeight.Bold)
+                .fontColor(this.badgePreviewNext ? this.t.ink2 : this.t.gold)
+                .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+                .backgroundColor(this.badgePreviewNext ? this.t.surface2 : this.t.goldSoft)
+                .borderRadius(99)
+                .onClick(() => { this.badgePreviewNext = !this.badgePreviewNext; })
+            }
           }
-          .width(56).height(56).borderRadius(18)
-          .backgroundColor(this.currentBadge()!.unlocked ? this.t.goldSoft : this.t.surface2)
-          .justifyContent(FlexAlign.Center)
+          .width('100%')
+          .margin({ bottom: 2 })
 
-          Text(this.currentBadge()!.name).fontFamily(FONT_DISPLAY).fontSize(18).fontColor(this.t.ink).margin({ top: 12 })
-          Text(this.currentBadge()!.desc).fontSize(12).fontColor(this.currentBadge()!.unlocked ? this.t.ink2 : this.t.ink3).margin({ top: 6 })
+          CoinBadge({
+            iconKey: this.currentBadge()!.iconKey,
+            tier: this.badgePreviewNext ? this.tierOf(this.currentBadge()!) + 1 : this.tierOf(this.currentBadge()!)
+          })
+
+          Text('徽章自动旋转 · 可拖动检视').fontSize(11).fontColor(this.t.ink3).margin({ top: 6 })
+          Text(this.currentBadge()!.name).fontFamily(FONT_DISPLAY).fontSize(18).fontColor(this.t.ink).margin({ top: 10 })
+          Text(this.currentBadge()!.desc).fontSize(12).fontColor(this.currentBadge()!.unlocked ? this.t.ink2 : this.t.ink3).margin({ top: 6 }).textAlign(TextAlign.Center)
 
           Row() {
-            Text(this.currentBadge()!.unlocked ? '已获得' : '未解锁')
-              .fontSize(12.5).fontWeight(FontWeight.Medium)
+            Text(this.currentBadge()!.unlocked
+              ? (this.badgePreviewNext
+                ? '下一等级 · ' + BADGE_TIER_NAMES[this.tierOf(this.currentBadge()!) + 1]
+                : '已获得 · ' + BADGE_TIER_NAMES[this.tierOf(this.currentBadge()!)])
+              : '未解锁')
+              .fontSize(12.5).fontWeight(FontWeight.Bold)
               .fontColor(this.currentBadge()!.unlocked ? this.t.leafDeep : this.t.ink3)
           }
-          .width('100%').height(40).borderRadius(12)
+          .width('100%').padding({ top: 10, bottom: 10 }).borderRadius(12)
           .backgroundColor(this.currentBadge()!.unlocked ? this.t.leafSoft : this.t.surface2)
           .justifyContent(FlexAlign.Center)
           .margin({ top: 16 })
 
           Row() {
-            Text('知道了').fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Medium)
+            Text('知道了').fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Bold)
           }
-          .width('100%').height(44).borderRadius(12)
+          .width('100%').padding({ top: 11, bottom: 11 }).borderRadius(12)
           .backgroundColor(this.t.leaf)
           .justifyContent(FlexAlign.Center)
           .margin({ top: 16 })
           .onClick(() => { this.showBadge = false; })
         }
-        .width(280)
+        .width(300)
         .padding(22)
         .backgroundColor(this.t.surface)
         .borderRadius(22)
@@ -997,7 +1044,7 @@ struct Me {
             Text('🍅').fontSize(64)
             Text('青番').fontFamily(FONT_DISPLAY).fontSize(20).fontColor(this.t.ink).margin({ top: 10 })
             Text('v1.0.0 · AI 番茄钟智能助手').fontSize(12).fontColor(this.t.ink3).margin({ top: 4 })
-            Text('把专注，种成一片森林。\n一款会陪你成长的专注工具。')
+            Text('把专注，种成一片番茄园。\n一款会陪你成长的专注工具。')
               .fontSize(12).fontColor(this.t.ink2).lineHeight(20).margin({ top: 14 }).textAlign(TextAlign.Center)
             Text('© 2026 青番团队').fontSize(11).fontColor(this.t.ink3).margin({ top: 14 })
           }
